@@ -32,6 +32,19 @@ def create_app(config_name=None):
         from app.models import User
         return User.query.get(int(user_id))
     
+    # 模板上下文处理器
+    @app.context_processor
+    def utility_processor():
+        from app.models import Alert
+        from flask_login import current_user
+        
+        def alerts_count():
+            if not current_user.is_authenticated:
+                return 0
+            return Alert.query.filter_by(is_read=False).count()
+        
+        return dict(alerts_count=alerts_count)
+    
     # 注册蓝图
     from app.routes import auth, dashboard, students, rooms, fees, reservations
     app.register_blueprint(auth.bp)
