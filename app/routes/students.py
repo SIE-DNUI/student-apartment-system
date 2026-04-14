@@ -4,7 +4,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, DateField, TextAreaField
 from wtforms.validators import DataRequired, Optional
 from wtforms.widgets import TextArea
-from app import db
+from app.models import db
 from app.models import Student, Room, FeeStandard, FeeRecord, Alert
 from datetime import datetime, date, timedelta
 from werkzeug.utils import secure_filename

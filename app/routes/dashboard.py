@@ -2,7 +2,7 @@ from flask import render_template, Blueprint, redirect, url_for, flash
 from flask_login import login_required, current_user
 from datetime import date, timedelta
 from sqlalchemy import func
-from app import db
+from app.models import db
 from app.models import Room, Student, FeeRecord, Reservation, Alert, FeeStandard
 
 bp = Blueprint('dashboard', __name__)

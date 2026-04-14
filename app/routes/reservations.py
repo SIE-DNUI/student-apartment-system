@@ -3,7 +3,7 @@ from flask_login import login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, DateField, IntegerField, TextAreaField
 from wtforms.validators import DataRequired, Optional, NumberRange
-from app import db
+from app.models import db
 from app.models import Reservation, Room, Student
 from datetime import datetime, date, timedelta
 from werkzeug.utils import secure_filename

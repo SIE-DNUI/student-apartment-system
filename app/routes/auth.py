@@ -3,7 +3,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField
 from wtforms.validators import DataRequired, Email, EqualTo, Length
-from app import db
+from app.models import db
 from app.models import User
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
