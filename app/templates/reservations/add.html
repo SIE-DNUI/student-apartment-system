@@ -5,69 +5,74 @@
 {% block content %}
 <div class="card">
     <div class="card-header">
-        <h5 class="mb-0"><i class="bi bi-calendar-plus me-2"></i>添加入住计划</h5>
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>添加入住计划</h5>
     </div>
     <div class="card-body">
-        <form method="POST">
-            {{ form.hidden_tag() }}
-            
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">{{ form.student_name.label }} <span class="text-danger">*</span></label>
-                    {{ form.student_name(class="form-control") }}
-                    {% if form.student_name.errors %}<div class="text-danger small">{{ form.student_name.errors[0] }}</div>{% endif %}
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">{{ form.student_id.label }}</label>
-                    {{ form.student_id(class="form-control") }}
-                </div>
-                
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.phone.label }}</label>
-                    {{ form.phone(class="form-control") }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.nationality.label }}</label>
-                    {{ form.nationality(class="form-control") }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.gender.label }}</label>
-                    {{ form.gender(class="form-select") }}
-                </div>
-                
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.check_in_date.label }} <span class="text-danger">*</span></label>
-                    {{ form.check_in_date(class="form-control", type="date") }}
-                    {% if form.check_in_date.errors %}<div class="text-danger small">{{ form.check_in_date.errors[0] }}</div>{% endif %}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.check_out_date.label }}</label>
-                    {{ form.check_out_date(class="form-control", type="date") }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.beds_needed.label }} <span class="text-danger">*</span></label>
-                    {{ form.beds_needed(class="form-control") }}
-                    {% if form.beds_needed.errors %}<div class="text-danger small">{{ form.beds_needed.errors[0] }}</div>{% endif %}
-                </div>
-                
-                <div class="col-md-6">
-                    <label class="form-label">{{ form.room_type.label }}</label>
-                    {{ form.room_type(class="form-select") }}
-                </div>
-                
-                <div class="col-12">
-                    <label class="form-label">{{ form.notes.label }}</label>
-                    {{ form.notes(class="form-control", rows=2) }}
+        <div class="row">
+            <div class="col-md-8">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            {{ form.department.label(class="form-label") }}
+                            {{ form.department(class="form-control", placeholder="如：国际交流处") }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.group_name.label(class="form-label") }}
+                            {{ form.group_name(class="form-control", placeholder="如：美国交换生团") }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            {{ form.person_count.label(class="form-label") }}
+                            {{ form.person_count(class="form-control", min="1") }}
+                            <small class="text-muted">系统将自动计算所需房间数（每间2人）</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            {{ form.check_in_date.label(class="form-label") }}
+                            {{ form.check_in_date(class="form-control", type="date") }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.check_out_date.label(class="form-label") }}
+                            {{ form.check_out_date(class="form-control", type="date") }}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.notes.label(class="form-label") }}
+                        {{ form.notes(class="form-control", rows="3", placeholder="备注信息") }}
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('reservations.index') }}" class="btn btn-outline-secondary">取消</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i> 保存
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>填写说明</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="mb-0">
+                            <li><strong>部门</strong>：填写组织部门名称</li>
+                            <li><strong>团体名称</strong>：填写来访团体或项目名称</li>
+                            <li><strong>入住人数</strong>：输入实际入住人数</li>
+                            <li><strong>房间计算</strong>：系统自动按每间2人计算所需房间数</li>
+                            <li><strong>入住/离开时间</strong>：选择具体日期范围</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
-            
-            <div class="mt-4">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-check-lg me-1"></i> 保存
-                </button>
-                <a href="{{ url_for('reservations.index') }}" class="btn btn-outline-secondary ms-2">取消</a>
-            </div>
-        </form>
+        </div>
     </div>
 </div>
 {% endblock %}

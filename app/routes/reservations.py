@@ -1,4 +1,4 @@
-from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app
+from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, DateField, IntegerField, TextAreaField
@@ -8,25 +8,20 @@ from app.models import Reservation, Room, Student
 from datetime import datetime, date, timedelta
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook
+from openpyxl.utils.datetime import from_excel
+from calendar import monthrange
 import os
 
 bp = Blueprint('reservations', __name__, url_prefix='/reservations')
 
 
 class ReservationForm(FlaskForm):
-    student_name = StringField('学生姓名', validators=[DataRequired(message='请输入学生姓名')])
-    student_id = StringField('学号', validators=[Optional()])
-    phone = StringField('手机号', validators=[Optional()])
-    nationality = StringField('国籍', validators=[Optional()])
-    gender = SelectField('性别', choices=[('男', '男'), ('女', '女'), ('', '不限')], validators=[Optional()])
-    room_type = SelectField('房间类型偏好', choices=[
-        ('', '不限'),
-        ('双人间', '双人间'),
-        ('单人间', '单人间')
-    ], validators=[Optional()])
-    check_in_date = DateField('计划入住日期', format='%Y-%m-%d', validators=[DataRequired(message='请选择入住日期')])
-    check_out_date = DateField('计划离开日期', format='%Y-%m-%d', validators=[Optional()])
-    beds_needed = IntegerField('需要床位数', validators=[DataRequired(), NumberRange(min=1, max=10)])
+    """入住计划表单"""
+    department = StringField('部门', validators=[Optional()])
+    group_name = StringField('团体名称', validators=[Optional()])
+    person_count = IntegerField('入住人数', validators=[DataRequired(message='请输入入住人数'), NumberRange(min=1, max=200)])
+    check_in_date = DateField('入住时间', format='%Y-%m-%d', validators=[DataRequired(message='请选择入住时间')])
+    check_out_date = DateField('离开时间', format='%Y-%m-%d', validators=[Optional()])
     notes = StringField('备注', validators=[Optional()])
 
 
@@ -38,17 +33,26 @@ def index():
     per_page = 20
     
     status_filter = request.args.get('status', '')
-    date_filter = request.args.get('date', '')
+    month_filter = request.args.get('month', '')
     
-    query = Reservation.query
+    query = Reservation.query.filter(Reservation.status != 'cancelled')
     
     if status_filter:
         query = query.filter(Reservation.status == status_filter)
     
-    if date_filter:
+    if month_filter:
         try:
-            filter_date = datetime.strptime(date_filter, '%Y-%m-%d').date()
-            query = query.filter(Reservation.check_in_date == filter_date)
+            year, month = map(int, month_filter.split('-'))
+            from calendar import monthrange
+            start = date(year, month, 1)
+            end = date(year, month, monthrange(year, month)[1])
+            query = query.filter(
+                Reservation.check_in_date <= end,
+                db.or_(
+                    Reservation.check_out_date >= start,
+                    Reservation.check_out_date == None
+                )
+            )
         except:
             pass
     
@@ -60,7 +64,7 @@ def index():
     
     return render_template('reservations/index.html', title='入住计划',
                          reservations=reservations, pagination=pagination,
-                         status_filter=status_filter, date_filter=date_filter)
+                         status_filter=status_filter, month_filter=month_filter)
 
 
 @bp.route('/add', methods=['GET', 'POST'])
@@ -73,15 +77,18 @@ def add():
         reservation = Reservation()
         form.populate_obj(reservation)
         
+        # 自动计算需要房间数（每间2人）
+        total_beds = 2  # 所有房间都是2张床
+        reservation.rooms_needed = (reservation.person_count + total_beds - 1) // total_beds
+        
         if reservation.check_out_date and reservation.check_in_date:
-            duration = (reservation.check_out_date - reservation.check_in_date).days
-            reservation.duration_days = duration
+            reservation.duration_days = (reservation.check_out_date - reservation.check_in_date).days
         
         reservation.status = 'pending'
         db.session.add(reservation)
         db.session.commit()
         
-        flash(f'入住计划已添加！', 'success')
+        flash(f'入住计划已添加！需要 {reservation.rooms_needed} 间房间', 'success')
         return redirect(url_for('reservations.index'))
     
     return render_template('reservations/add.html', title='添加入住计划', form=form)
@@ -97,9 +104,12 @@ def edit(reservation_id):
     if form.validate_on_submit():
         form.populate_obj(reservation)
         
+        # 重新计算需要房间数
+        total_beds = 2
+        reservation.rooms_needed = (reservation.person_count + total_beds - 1) // total_beds
+        
         if reservation.check_out_date and reservation.check_in_date:
-            duration = (reservation.check_out_date - reservation.check_in_date).days
-            reservation.duration_days = duration
+            reservation.duration_days = (reservation.check_out_date - reservation.check_in_date).days
         
         db.session.commit()
         
@@ -122,126 +132,196 @@ def delete(reservation_id):
     return redirect(url_for('reservations.index'))
 
 
-@bp.route('/confirm/<int:reservation_id>', methods=['POST'])
+@bp.route('/calendar')
 @login_required
-def confirm(reservation_id):
-    """确认入住计划"""
-    reservation = Reservation.query.get_or_404(reservation_id)
+def calendar():
+    """房间日历视图 - 显示某月每天的房间占用情况"""
+    # 获取年月参数，默认当前月
+    year = request.args.get('year', date.today().year, type=int)
+    month = request.args.get('month', date.today().month, type=int)
     
-    available_rooms = Room.query.filter(
-        Room.current_occupancy < Room.capacity,
-        Room.status != 'maintenance'
-    ).all()
+    # 确保月份在1-12之间
+    if month < 1:
+        month = 12
+        year -= 1
+    elif month > 12:
+        month = 1
+        year += 1
     
-    suitable_rooms = [r for r in available_rooms if (r.capacity - r.current_occupancy) >= reservation.beds_needed]
-    
-    if not suitable_rooms:
-        flash('暂无足够的空房间！', 'danger')
-        return redirect(url_for('reservations.index'))
-    
-    room = suitable_rooms[0]
-    room.current_occupancy += reservation.beds_needed
-    if room.current_occupancy >= room.capacity:
-        room.status = 'full'
-    
-    student = Student(
-        name=reservation.student_name,
-        student_id=reservation.student_id,
-        phone=reservation.phone,
-        nationality=reservation.nationality,
-        gender=reservation.gender,
-        room_id=room.id,
-        check_in_date=reservation.check_in_date,
-        check_out_date=reservation.check_out_date,
-        status='active'
-    )
-    
-    db.session.add(student)
-    reservation.status = 'confirmed'
-    db.session.commit()
-    
-    flash(f'已确认入住，分配房间: {room.building}-{room.room_number}，学生ID: {student.id}', 'success')
-    return redirect(url_for('reservations.index'))
-
-
-@bp.route('/cancel/<int:reservation_id>', methods=['POST'])
-@login_required
-def cancel(reservation_id):
-    """取消入住计划"""
-    reservation = Reservation.query.get_or_404(reservation_id)
-    reservation.status = 'cancelled'
-    db.session.commit()
-    
-    flash('入住计划已取消', 'info')
-    return redirect(url_for('reservations.index'))
-
-
-@bp.route('/forecast', methods=['GET', 'POST'])
-@login_required
-def forecast():
-    """房间预判 - 预测某天房间是否够用"""
-    target_date = None
-    beds_needed = 1
-    forecast_result = None
-    
-    if request.method == 'POST':
-        try:
-            target_date = datetime.strptime(request.form.get('target_date'), '%Y-%m-%d').date()
-        except:
-            target_date = date.today()
-        
-        beds_needed = int(request.form.get('beds_needed', 1))
-        forecast_result = predict_room_availability(target_date, beds_needed)
-    
-    return render_template('reservations/forecast.html', title='房间预判',
-                         target_date=target_date, beds_needed=beds_needed, forecast_result=forecast_result)
-
-
-def predict_room_availability(target_date, beds_needed=1):
-    """预测指定日期的房间可用情况"""
-    total_beds = db.session.query(db.func.sum(Room.capacity)).scalar() or 0
+    # 获取总房间数
     total_rooms = Room.query.count()
     
-    checkin_reservations = Reservation.query.filter(
-        Reservation.check_in_date == target_date,
-        Reservation.status == 'pending'
+    # 计算该月天数
+    _, days_in_month = monthrange(year, month)
+    month_start = date(year, month, 1)
+    month_end = date(year, month, days_in_month)
+    
+    # 获取该月所有入住计划
+    reservations = Reservation.query.filter(
+        Reservation.check_in_date <= month_end,
+        db.or_(
+            Reservation.check_out_date >= month_start,
+            Reservation.check_out_date == None
+        ),
+        Reservation.status != 'cancelled'
     ).all()
-    checkin_count = sum(r.beds_needed for r in checkin_reservations)
     
-    checkout_students = Student.query.filter(
-        Student.check_out_date == target_date,
-        Student.status == 'active'
-    ).all()
-    checkout_count = len(checkout_students)
+    # 生成每天的数据
+    calendar_days = []
+    for day in range(1, days_in_month + 1):
+        current_date = date(year, month, day)
+        
+        # 计算当天占用的房间数
+        occupied_rooms = 0
+        day_reservations = []
+        
+        for res in reservations:
+            # 检查计划是否在当天有效
+            if res.check_in_date <= current_date:
+                if res.check_out_date is None or res.check_out_date > current_date:
+                    occupied_rooms += res.rooms_needed
+                    day_reservations.append(res)
+        
+        # 计算剩余房间数
+        available_rooms = total_rooms - occupied_rooms
+        
+        # 判断是否缺少房间
+        shortage = 0
+        if occupied_rooms > total_rooms:
+            shortage = occupied_rooms - total_rooms
+        
+        calendar_days.append({
+            'date': current_date,
+            'day': day,
+            'occupied_rooms': occupied_rooms,
+            'available_rooms': max(0, available_rooms),
+            'shortage': shortage,
+            'total_rooms': total_rooms,
+            'is_weekend': current_date.weekday() >= 5,
+            'is_today': current_date == date.today(),
+            'reservations': day_reservations
+        })
     
-    current_occupied = db.session.query(db.func.sum(Room.current_occupancy)).scalar() or 0
+    # 获取高峰期预警（缺房的日子）
+    peak_days = [d for d in calendar_days if d['shortage'] > 0]
     
-    net_beds_needed = checkin_count - checkout_count + beds_needed
-    available_beds = total_beds - current_occupied + checkout_count
-    
-    result = {
-        'target_date': target_date,
-        'beds_needed': beds_needed,
-        'total_beds': total_beds,
+    # 统计信息
+    stats = {
         'total_rooms': total_rooms,
-        'current_occupied': current_occupied,
-        'available_beds': available_beds,
-        'checkin_count': checkin_count,
-        'checkout_count': checkout_count,
-        'net_beds_needed': net_beds_needed,
-        'is_sufficient': available_beds >= net_beds_needed,
-        'shortage': max(0, net_beds_needed - available_beds),
-        'checkin_reservations': checkin_reservations,
-        'checkout_students': checkout_students
+        'month_reservations': len(reservations),
+        'total_persons': sum(r.person_count for r in reservations),
+        'peak_days_count': len(peak_days)
     }
     
-    return result
+    return render_template('reservations/calendar.html', title='房间日历',
+                         calendar_days=calendar_days,
+                         year=year, month=month,
+                         stats=stats, peak_days=peak_days)
+
+
+@bp.route('/api/daily-rooms')
+@login_required
+def api_daily_rooms():
+    """API: 获取指定日期的房间占用详情"""
+    target_date = request.args.get('date')
+    if not target_date:
+        return jsonify({'error': '缺少日期参数'}), 400
+    
+    try:
+        target = datetime.strptime(target_date, '%Y-%m-%d').date()
+    except:
+        return jsonify({'error': '日期格式错误'}), 400
+    
+    total_rooms = Room.query.count()
+    
+    # 获取当天有效的入住计划
+    reservations = Reservation.query.filter(
+        Reservation.check_in_date <= target,
+        db.or_(
+            Reservation.check_out_date > target,
+            Reservation.check_out_date == None
+        ),
+        Reservation.status != 'cancelled'
+    ).all()
+    
+    occupied = sum(r.rooms_needed for r in reservations)
+    
+    return jsonify({
+        'date': target.isoformat(),
+        'total_rooms': total_rooms,
+        'occupied_rooms': occupied,
+        'available_rooms': max(0, total_rooms - occupied),
+        'shortage': max(0, occupied - total_rooms),
+        'reservations': [{
+            'id': r.id,
+            'department': r.department or '-',
+            'group_name': r.group_name or r.student_name or '-',
+            'person_count': r.person_count,
+            'rooms_needed': r.rooms_needed,
+            'check_in': r.check_in_date.isoformat() if r.check_in_date else '-',
+            'check_out': r.check_out_date.isoformat() if r.check_out_date else '-',
+            'status': r.status,
+            'notes': r.notes or ''
+        } for r in reservations]
+    })
+
+
+@bp.route('/stats')
+@login_required
+def stats():
+    """房间统计面板"""
+    total_rooms = Room.query.count()
+    
+    # 获取所有有效入住计划
+    all_reservations = Reservation.query.filter(
+        Reservation.status != 'cancelled'
+    ).all()
+    
+    # 获取未来90天的数据
+    future_date = date.today() + timedelta(days=90)
+    future_reservations = [r for r in all_reservations 
+                          if r.check_in_date <= future_date 
+                          and (r.check_out_date is None or r.check_out_date >= date.today())]
+    
+    # 按月统计
+    monthly_stats = {}
+    for res in future_reservations:
+        if res.check_in_date:
+            month_key = res.check_in_date.strftime('%Y-%m')
+            if month_key not in monthly_stats:
+                monthly_stats[month_key] = {'plans': 0, 'persons': 0, 'rooms': 0}
+            monthly_stats[month_key]['plans'] += 1
+            monthly_stats[month_key]['persons'] += res.person_count
+            monthly_stats[month_key]['rooms'] += res.rooms_needed
+    
+    # 找出高峰期
+    peak_analysis = []
+    for d in range(0, 91):
+        current = date.today() + timedelta(days=d)
+        occupied = 0
+        for res in all_reservations:
+            if res.check_in_date <= current:
+                if res.check_out_date is None or res.check_out_date > current:
+                    if res.check_in_date <= future_date:
+                        occupied += res.rooms_needed
+        
+        if occupied > total_rooms:
+            peak_analysis.append({
+                'date': current,
+                'occupied': occupied,
+                'shortage': occupied - total_rooms
+            })
+    
+    return render_template('reservations/stats.html', title='房间统计',
+                         total_rooms=total_rooms,
+                         monthly_stats=monthly_stats,
+                         peak_analysis=peak_analysis[:10])
 
 
 @bp.route('/batch-import', methods=['GET', 'POST'])
 @login_required
 def batch_import():
-    """批量导入入住计划"""
+    """批量导入入住计划 - 支持用户模板格式"""
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('请选择要上传的文件', 'danger')
@@ -258,66 +338,121 @@ def batch_import():
         
         try:
             wb = load_workbook(file)
-            ws = wb.active
             
+            # 优先读取"总表"工作表，否则读取活动工作表
+            if '总表' in wb.sheetnames:
+                ws = wb['总表']
+            else:
+                ws = wb.active
+            
+            # 读取表头
             headers = [cell.value for cell in ws[1] if cell.value]
             
             success_count = 0
             error_count = 0
+            error_details = []
             
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                if not row[0]:
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                if not row[0] and not any(row[:5]):
                     continue
                 
-                row_data = dict(zip(headers, row))
-                
                 try:
-                    student_name = str(row_data.get('学生姓名', '')).strip()
-                    if not student_name:
-                        error_count += 1
-                        continue
+                    # 构建行数据字典
+                    row_data = dict(zip(headers, row))
                     
-                    check_in_date = row_data.get('计划入住日期')
+                    # 提取数据
+                    department = str(row_data.get('部门', '')).strip()
+                    group_name = str(row_data.get('国籍/团体名称', '') or row_data.get('团体名称', '')).strip()
+                    person_count_str = str(row_data.get('入住人数', 0)).strip()
+                    
+                    # 处理Excel日期序列号
+                    check_in_date = row_data.get('入住时间', '')
+                    check_out_date = row_data.get('离开时间', '')
+                    
+                    if isinstance(check_in_date, (int, float)):
+                        # Excel日期序列号转换为日期
+                        from openpyxl.utils.datetime import from_excel
+                        check_in_date = from_excel(check_in_date)
+                        if hasattr(check_in_date, 'date'):
+                            check_in_date = check_in_date.date()
+                    
+                    if isinstance(check_out_date, (int, float)):
+                        check_out_date = from_excel(check_out_date)
+                        if hasattr(check_out_date, 'date'):
+                            check_out_date = check_out_date.date()
+                    
                     if not check_in_date:
                         error_count += 1
+                        error_details.append(f'第{row_idx}行: 缺少入住时间')
                         continue
                     
+                    # 解析日期
                     if isinstance(check_in_date, date):
                         pass
                     else:
                         check_in_date = datetime.strptime(str(check_in_date), '%Y-%m-%d').date()
                     
-                    reservation = Reservation()
-                    reservation.student_name = student_name
-                    reservation.student_id = str(row_data.get('学号', '')).strip()
-                    reservation.phone = str(row_data.get('手机号', '')).strip()
-                    reservation.nationality = str(row_data.get('国籍', '')).strip()
-                    reservation.gender = str(row_data.get('性别', '')).strip()
-                    reservation.check_in_date = check_in_date
-                    reservation.beds_needed = int(row_data.get('床位数', 1))
-                    reservation.notes = str(row_data.get('备注', '')).strip()
-                    
-                    check_out_date = row_data.get('计划离开日期')
                     if check_out_date:
                         if isinstance(check_out_date, date):
-                            reservation.check_out_date = check_out_date
+                            pass
                         else:
-                            reservation.check_out_date = datetime.strptime(str(check_out_date), '%Y-%m-%d').date()
-                        
-                        if reservation.check_out_date and reservation.check_in_date:
-                            reservation.duration_days = (reservation.check_out_date - reservation.check_in_date).days
+                            check_out_date = datetime.strptime(str(check_out_date), '%Y-%m-%d').date()
                     
-                    reservation.status = 'pending'
+                    # 解析人数
+                    try:
+                        person_count = int(person_count_str) if person_count_str else 0
+                    except:
+                        person_count = 0
+                    
+                    if person_count <= 0:
+                        # 尝试从"需要房间数"字段推算
+                        rooms_str = str(row_data.get('需要房间数', 0)).strip()
+                        try:
+                            rooms_needed = int(rooms_str)
+                            person_count = rooms_needed * 2  # 每间2人
+                        except:
+                            person_count = 2
+                    
+                    # 计算需要房间数（每间2人）
+                    total_beds_per_room = 2
+                    rooms_needed = (person_count + total_beds_per_room - 1) // total_beds_per_room
+                    
+                    # 创建入住计划
+                    reservation = Reservation(
+                        department=department if department and department != 'None' else None,
+                        group_name=group_name if group_name and group_name != 'None' else None,
+                        person_count=person_count,
+                        rooms_needed=rooms_needed,
+                        check_in_date=check_in_date,
+                        check_out_date=check_out_date,
+                        status='pending',
+                        notes=str(row_data.get('备注', '')).strip()
+                    )
+                    
+                    # 计算天数
+                    if reservation.check_out_date:
+                        reservation.duration_days = (reservation.check_out_date - reservation.check_in_date).days
                     
                     db.session.add(reservation)
                     success_count += 1
                     
                 except Exception as e:
                     error_count += 1
+                    error_details.append(f'第{row_idx}行: {str(e)}')
                     continue
             
             db.session.commit()
-            flash(f'导入完成！成功: {success_count} 条，失败: {error_count} 条', 'success')
+            
+            msg = f'导入完成！成功: {success_count} 条'
+            if error_count > 0:
+                msg += f'，失败: {error_count} 条'
+            flash(msg, 'success' if error_count == 0 else 'warning')
+            
+            # 存储错误详情到session供查看
+            if error_details:
+                from flask import session
+                session['import_errors'] = error_details[:20]
+            
             return redirect(url_for('reservations.index'))
             
         except Exception as e:
@@ -327,42 +462,104 @@ def batch_import():
     return render_template('reservations/batch_import.html', title='批量导入入住计划')
 
 
-@bp.route('/calendar')
+@bp.route('/template-download')
 @login_required
-def calendar():
-    """入住日历视图"""
-    start_date = request.args.get('start', date.today().isoformat())
-    end_date = request.args.get('end', (date.today() + timedelta(days=30)).isoformat())
+def template_download():
+    """下载导入模板"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from io import BytesIO
     
-    try:
-        start = datetime.strptime(start_date, '%Y-%m-%d').date()
-        end = datetime.strptime(end_date, '%Y-%m-%d').date()
-    except:
-        start = date.today()
-        end = date.today() + timedelta(days=30)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '总表'
     
-    reservations = Reservation.query.filter(
-        Reservation.check_in_date >= start,
-        Reservation.check_in_date <= end
-    ).order_by(Reservation.check_in_date).all()
+    # 设置表头样式
+    header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+    header_font = Font(color='FFFFFF', bold=True)
     
-    calendar_data = []
-    current = start
-    while current <= end:
-        day_reservations = [r for r in reservations if r.check_in_date == current]
-        checkouts = Student.query.filter(
-            Student.check_out_date == current,
-            Student.status == 'active'
-        ).all()
-        
-        calendar_data.append({
-            'date': current,
-            'checkins': day_reservations,
-            'checkouts': checkouts,
-            'checkin_count': len(day_reservations),
-            'checkout_count': len(checkouts)
-        })
-        current += timedelta(days=1)
+    headers = ['部门', '国籍/团体名称', '入住时间', '离开时间', '入住人数', '需要房间数', '备注']
     
-    return render_template('reservations/calendar.html', title='入住日历',
-                         calendar_data=calendar_data, start=start, end=end)
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+    
+    # 添加示例数据
+    example_data = [
+        ['国际交流处', '美国交换生团', '2024-03-01', '2024-06-30', 20, 10, '春季学期交换生'],
+        ['人事处', '新入职教师', '2024-03-05', '2024-08-31', 6, 3, ''],
+        ['国际交流处', '德国暑期研学团', '2024-07-01', '2024-07-31', 40, 20, ''],
+    ]
+    
+    for row_idx, row_data in enumerate(example_data, 2):
+        for col_idx, value in enumerate(row_data, 1):
+            ws.cell(row=row_idx, column=col_idx, value=value)
+    
+    # 设置列宽
+    ws.column_dimensions['A'].width = 15
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 12
+    ws.column_dimensions['G'].width = 20
+    
+    # 保存
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return current_app.send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='入住计划导入模板.xlsx'
+    )
+
+
+@bp.route('/confirm/<int:reservation_id>', methods=['POST'])
+@login_required
+def confirm(reservation_id):
+    """确认入住计划"""
+    reservation = Reservation.query.get_or_404(reservation_id)
+    
+    # 检查是否有足够的空房间
+    total_rooms = Room.query.count()
+    target_date = reservation.check_in_date
+    
+    # 计算当天已占用房间数
+    existing_reservations = Reservation.query.filter(
+        Reservation.id != reservation_id,
+        Reservation.check_in_date <= target_date,
+        db.or_(
+            Reservation.check_out_date > target_date,
+            Reservation.check_out_date == None
+        ),
+        Reservation.status == 'confirmed'
+    ).all()
+    
+    occupied = sum(r.rooms_needed for r in existing_reservations)
+    
+    if occupied + reservation.rooms_needed > total_rooms:
+        flash(f'房间不足！需要 {reservation.rooms_needed} 间，当前剩余 {total_rooms - occupied} 间', 'danger')
+        return redirect(url_for('reservations.index'))
+    
+    reservation.status = 'confirmed'
+    db.session.commit()
+    
+    flash(f'入住计划已确认！{reservation.group_name or reservation.student_name} ({reservation.person_count}人, {reservation.rooms_needed}间)', 'success')
+    return redirect(url_for('reservations.index'))
+
+
+@bp.route('/cancel/<int:reservation_id>', methods=['POST'])
+@login_required
+def cancel(reservation_id):
+    """取消入住计划"""
+    reservation = Reservation.query.get_or_404(reservation_id)
+    reservation.status = 'cancelled'
+    db.session.commit()
+    
+    flash('入住计划已取消', 'info')
+    return redirect(url_for('reservations.index'))

@@ -195,6 +195,12 @@
             <a href="{{ url_for('dashboard.index') }}" class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
                 <i class="bi bi-speedometer2 me-2"></i> 仪表盘
             </a>
+            <a href="{{ url_for('reservations.calendar') }}" class="nav-link {% if request.endpoint and 'reservations.calendar' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-calendar3 me-2"></i> 房间日历
+            </a>
+            <a href="{{ url_for('reservations.stats') }}" class="nav-link {% if request.endpoint and 'reservations.stats' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-bar-chart me-2"></i> 房间统计
+            </a>
             
             <div class="nav-header">管理模块</div>
             <a href="{{ url_for('students.index') }}" class="nav-link {% if request.endpoint and 'students' in request.endpoint %}active{% endif %}">
@@ -206,7 +212,7 @@
             <a href="{{ url_for('fees.standards') }}" class="nav-link {% if request.endpoint and 'fees' in request.endpoint %}active{% endif %}">
                 <i class="bi bi-currency-yuan me-2"></i> 收费管理
             </a>
-            <a href="{{ url_for('reservations.index') }}" class="nav-link {% if request.endpoint and 'reservations' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('reservations.index') }}" class="nav-link {% if request.endpoint and request.endpoint in ['reservations.index', 'reservations.add', 'reservations.edit', 'reservations.batch_import'] %}active{% endif %}">
                 <i class="bi bi-calendar-event me-2"></i> 入住计划
             </a>
             
@@ -217,9 +223,6 @@
                 {% if unread_alerts > 0 %}
                 <span class="badge bg-danger ms-auto">{{ unread_alerts }}</span>
                 {% endif %}
-            </a>
-            <a href="{{ url_for('dashboard.room_status') }}" class="nav-link {% if request.endpoint == 'dashboard.room_status' %}active{% endif %}">
-                <i class="bi bi-bar-chart me-2"></i> 房间统计
             </a>
             <a href="{{ url_for('auth.profile') }}" class="nav-link {% if request.endpoint == 'auth.profile' %}active{% endif %}">
                 <i class="bi bi-person me-2"></i> 个人资料

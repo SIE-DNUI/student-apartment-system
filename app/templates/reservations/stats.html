@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}房间统计{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>房间统计面板</h5>
+    </div>
+    <div class="card-body">
+        <!-- 统计卡片 -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <h3 class="mb-0">{{ total_rooms }}</h3>
+                        <small>总房间数</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h3 class="mb-0">{{ stats.total_rooms - stats.total_rooms }}</h3>
+                        <small>当前可用</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h3 class="mb-0">{{ monthly_stats|length }}</h3>
+                        <small>有计划的月份</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body text-center">
+                        <h3 class="mb-0">{{ peak_analysis|length }}</h3>
+                        <small>高峰期天数</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <!-- 月度统计 -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-calendar-month me-2"></i>未来90天月度统计</h6>
+                    </div>
+                    <div class="card-body">
+                        {% if monthly_stats %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>月份</th>
+                                        <th>计划数</th>
+                                        <th>总人数</th>
+                                        <th>总房间</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for month, data in monthly_stats.items()|sort %}
+                                    <tr>
+                                        <td>
+                                            <a href="{{ url_for('reservations.calendar', year=month.split('-')[0]|int, month=month.split('-')[1]|int) }}">
+                                                {{ month }}
+                                            </a>
+                                        </td>
+                                        <td>{{ data.plans }}</td>
+                                        <td>{{ data.persons }}</td>
+                                        <td>
+                                            {% if data.rooms > total_rooms %}
+                                                <span class="badge bg-danger">{{ data.rooms }}</span>
+                                            {% else %}
+                                                <span class="badge bg-primary">{{ data.rooms }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-center mb-0">暂无数据</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 高峰期预警 -->
+            <div class="col-md-6">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>高峰期预警（未来90天缺房日）</h6>
+                    </div>
+                    <div class="card-body">
+                        {% if peak_analysis %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>日期</th>
+                                        <th>占用房间</th>
+                                        <th>缺少房间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for day in peak_analysis %}
+                                    <tr class="table-danger">
+                                        <td>{{ day.date }}</td>
+                                        <td>{{ day.occupied }}</td>
+                                        <td>
+                                            <span class="badge bg-danger">-{{ day.shortage }}</span>
+                                        </td>
+                                        <td>
+                                            <a href="{{ url_for('reservations.calendar', year=day.date.year, month=day.date.month) }}" class="btn btn-sm btn-outline-danger">
+                                                查看
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center text-success py-4">
+                            <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                            <p class="mt-2 mb-0">未来90天内暂无高峰期</p>
+                            <small class="text-muted">所有日期的房间供应充足</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="mt-4">
+            <a href="{{ url_for('reservations.calendar') }}" class="btn btn-primary">
+                <i class="bi bi-calendar3 me-1"></i> 查看日历
+            </a>
+            <a href="{{ url_for('reservations.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-list me-1"></i> 入住计划列表
+            </a>
+            <a href="{{ url_for('reservations.batch_import') }}" class="btn btn-success">
+                <i class="bi bi-upload me-1"></i> 批量导入
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -8,63 +8,80 @@
         <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>编辑入住计划</h5>
     </div>
     <div class="card-body">
-        <form method="POST">
-            {{ form.hidden_tag() }}
-            
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">{{ form.student_name.label }} <span class="text-danger">*</span></label>
-                    {{ form.student_name(class="form-control") }}
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">{{ form.student_id.label }}</label>
-                    {{ form.student_id(class="form-control") }}
-                </div>
-                
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.phone.label }}</label>
-                    {{ form.phone(class="form-control") }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.nationality.label }}</label>
-                    {{ form.nationality(class="form-control") }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.gender.label }}</label>
-                    {{ form.gender(class="form-select") }}
-                </div>
-                
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.check_in_date.label }} <span class="text-danger">*</span></label>
-                    {{ form.check_in_date(class="form-control", type="date") }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.check_out_date.label }}</label>
-                    {{ form.check_out_date(class="form-control", type="date") }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.beds_needed.label }} <span class="text-danger">*</span></label>
-                    {{ form.beds_needed(class="form-control") }}
-                </div>
-                
-                <div class="col-md-6">
-                    <label class="form-label">{{ form.room_type.label }}</label>
-                    {{ form.room_type(class="form-select") }}
-                </div>
-                
-                <div class="col-12">
-                    <label class="form-label">{{ form.notes.label }}</label>
-                    {{ form.notes(class="form-control", rows=2) }}
+        <div class="row">
+            <div class="col-md-8">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            {{ form.department.label(class="form-label") }}
+                            {{ form.department(class="form-control") }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.group_name.label(class="form-label") }}
+                            {{ form.group_name(class="form-control") }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            {{ form.person_count.label(class="form-label") }}
+                            {{ form.person_count(class="form-control", min="1") }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            {{ form.check_in_date.label(class="form-label") }}
+                            {{ form.check_in_date(class="form-control", type="date") }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.check_out_date.label(class="form-label") }}
+                            {{ form.check_out_date(class="form-control", type="date") }}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.notes.label(class="form-label") }}
+                        {{ form.notes(class="form-control", rows="3") }}
+                    </div>
+                    
+                    <!-- 当前状态 -->
+                    <div class="alert alert-secondary">
+                        <strong>当前状态：</strong>
+                        {% if reservation.status == 'pending' %}
+                            <span class="badge bg-warning">待确认</span>
+                        {% elif reservation.status == 'confirmed' %}
+                            <span class="badge bg-success">已确认</span>
+                        {% else %}
+                            <span class="badge bg-secondary">已取消</span>
+                        {% endif %}
+                        <span class="ms-3"><strong>需要房间数：</strong>{{ reservation.rooms_needed }}间</span>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('reservations.index') }}" class="btn btn-outline-secondary">取消</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i> 保存修改
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0">信息</h6>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>创建时间：</strong>{{ reservation.created_at }}</p>
+                        <p><strong>更新时间：</strong>{{ reservation.updated_at }}</p>
+                        <hr>
+                        <p class="mb-0"><small class="text-muted">提示：修改入住人数后，系统将自动重新计算所需房间数</small></p>
+                    </div>
                 </div>
             </div>
-            
-            <div class="mt-4">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-check-lg me-1"></i> 保存修改
-                </button>
-                <a href="{{ url_for('reservations.index') }}" class="btn btn-outline-secondary ms-2">取消</a>
-            </div>
-        </form>
+        </div>
     </div>
 </div>
 {% endblock %}

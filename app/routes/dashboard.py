@@ -72,6 +72,20 @@ def get_dashboard_stats():
     # 待确认的入住计划
     pending_reservations = Reservation.query.filter_by(status='pending').count()
     
+    # 总计划房间数（未来90天）
+    future_date = date.today() + timedelta(days=90)
+    future_rooms = db.session.query(func.sum(Reservation.rooms_needed)).filter(
+        Reservation.status != 'cancelled',
+        Reservation.check_in_date <= future_date
+    ).scalar() or 0
+    
+    # 今日计划房间占用
+    today_rooms = db.session.query(func.sum(Reservation.rooms_needed)).filter(
+        Reservation.check_in_date <= date.today(),
+        db.or_(Reservation.check_out_date > date.today(), Reservation.check_out_date == None),
+        Reservation.status != 'cancelled'
+    ).scalar() or 0
+    
     return {
         'total_rooms': total_rooms,
         'available_rooms': available_rooms,
@@ -84,7 +98,9 @@ def get_dashboard_stats():
         'due_soon': due_soon,
         'overdue': overdue,
         'pending_reservations': pending_reservations,
-        'occupancy_rate': round(total_occupancy / total_capacity * 100, 1) if total_capacity > 0 else 0
+        'occupancy_rate': round(total_occupancy / total_capacity * 100, 1) if total_capacity > 0 else 0,
+        'today_rooms_used': today_rooms,
+        'future_rooms_planned': future_rooms
     }
 
 

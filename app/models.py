@@ -187,11 +187,18 @@ class FeeRecord(db.Model):
 
 
 class Reservation(db.Model):
-    """入住计划表 - 存储未来入住计划"""
+    """入住计划表 - 存储未来入住计划（以房间为单位）"""
     __tablename__ = 'reservations'
     
     id = db.Column(db.Integer, primary_key=True)
-    student_name = db.Column(db.String(100), nullable=False)
+    # 新增字段：按用户需求设计
+    department = db.Column(db.String(100))  # 部门
+    group_name = db.Column(db.String(200))  # 国籍/团体名称
+    person_count = db.Column(db.Integer, default=0)  # 入住人数
+    rooms_needed = db.Column(db.Integer, default=1)  # 需要房间数（核心字段）
+    
+    # 保留原有字段（兼容）
+    student_name = db.Column(db.String(100))  # 学生姓名（可选）
     student_id = db.Column(db.String(50))  # 学号（可选）
     phone = db.Column(db.String(20))
     nationality = db.Column(db.String(50))
@@ -200,14 +207,13 @@ class Reservation(db.Model):
     check_in_date = db.Column(db.Date, nullable=False)  # 计划入住日期
     check_out_date = db.Column(db.Date)  # 计划离开日期
     duration_days = db.Column(db.Integer)  # 预计入住天数
-    beds_needed = db.Column(db.Integer, default=1)  # 需要床位数
     status = db.Column(db.String(20), default='pending')  # pending, confirmed, cancelled
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def __repr__(self):
-        return f'<Reservation {self.student_name}: {self.check_in_date}>'
+        return f'<Reservation {self.group_name or self.student_name}: {self.check_in_date} ({self.rooms_needed}房)>'
 
 
 class Alert(db.Model):

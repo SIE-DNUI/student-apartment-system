@@ -1,49 +1,158 @@
 {% extends "base.html" %}
 
-{% block title %}入住计划日历{% endblock %}
+{% block title %}房间日历{% endblock %}
 
 {% block content %}
 <div class="card">
-    <div class="card-header">
-        <h5 class="mb-0"><i class="bi bi-calendar3 me-2"></i>入住计划日历</h5>
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-0"><i class="bi bi-calendar3 me-2"></i>房间日历 - {{ year }}年{{ month }}月</h5>
+            <small class="text-muted">总房间数: {{ stats.total_rooms }} | 本月计划: {{ stats.month_reservations }}个 | 入住人数: {{ stats.total_persons }}</small>
+        </div>
+        <div>
+            <!-- 月份导航 -->
+            <a href="{{ url_for('reservations.calendar', year=year if month > 1 else year-1, month=month-1 if month > 1 else 12) }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-chevron-left"></i> 上月
+            </a>
+            <a href="{{ url_for('reservations.calendar', year=date.today().year, month=date.today().month) }}" class="btn btn-outline-primary btn-sm">
+                本月
+            </a>
+            <a href="{{ url_for('reservations.calendar', year=year if month < 12 else year+1, month=month+1 if month < 12 else 1) }}" class="btn btn-outline-secondary btn-sm">
+                下月 <i class="bi bi-chevron-right"></i>
+            </a>
+            <a href="{{ url_for('reservations.index') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-list me-1"></i> 计划列表
+            </a>
+        </div>
     </div>
     <div class="card-body">
-        {% if events %}
+        {% if peak_days %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>高峰期预警:</strong> 本月有 {{ peak_days|length }} 天房间不足！
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+        
         <div class="table-responsive">
             <table class="table table-bordered calendar-table">
-                <thead class="table-light">
+                <thead class="table-dark">
                     <tr>
-                        <th width="15%">日期</th>
-                        <th width="25%">事件</th>
-                        <th width="15%">类型</th>
-                        <th>备注</th>
+                        <th width="8%" class="text-center">日期</th>
+                        <th width="8%" class="text-center">星期</th>
+                        <th width="10%" class="text-center">已占用</th>
+                        <th width="10%" class="text-center">剩余</th>
+                        <th width="10%" class="text-center">状态</th>
+                        <th>入住计划</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for event in events %}
-                    <tr class="{{ 'table-success' if '入住' in event.title else 'table-secondary' if '退房' in event.title else '' }}">
-                        <td><strong>{{ event.date }}</strong></td>
-                        <td>
-                            <span class="badge bg-{{ 'success' if '入住' in event.title else 'secondary' }}">
-                                {{ event.title }}
-                            </span>
+                    {% for day in calendar_days %}
+                    <tr class="{{ 'table-danger' if day.shortage > 0 else 'table-warning' if day.occupied_rooms > stats.total_rooms * 0.8 else '' if day.is_weekend else '' }}">
+                        <td class="text-center {{ 'bg-primary text-white' if day.is_today else '' }}">
+                            <strong>{{ day.day }}</strong>
                         </td>
-                        <td>{{ '入住' if event.beds > 0 else '退房' }}</td>
+                        <td class="text-center {{ 'text-danger fw-bold' if day.is_weekend else '' }}">
+                            {{ ['一','二','三','四','五','六','日'][day.date.weekday()] }}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-primary">{{ day.occupied_rooms }}</span>
+                            <small class="text-muted">/ {{ stats.total_rooms }}</small>
+                        </td>
+                        <td class="text-center">
+                            {% if day.available_rooms == 0 %}
+                                <span class="badge bg-danger">0</span>
+                            {% elif day.available_rooms < 5 %}
+                                <span class="badge bg-warning">{{ day.available_rooms }}</span>
+                            {% else %}
+                                <span class="badge bg-success">{{ day.available_rooms }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if day.shortage > 0 %}
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>缺{{ day.shortage }}间
+                                </span>
+                            {% elif day.available_rooms == 0 %}
+                                <span class="badge bg-danger">满房</span>
+                            {% elif day.available_rooms < 5 %}
+                                <span class="badge bg-warning">紧张</span>
+                            {% else %}
+                                <span class="badge bg-success">充足</span>
+                            {% endif %}
+                        </td>
                         <td>
-                            {{ event.nationality }}
+                            {% if day.reservations %}
+                                <button type="button" class="btn btn-sm btn-link p-0" data-bs-toggle="modal" data-bs-target="#dayModal{{ day.day }}">
+                                    <i class="bi bi-people me-1"></i> {{ day.reservations|length }}个计划
+                                </button>
+                                
+                                <!-- Modal for day details -->
+                                <div class="modal fade" id="dayModal{{ day.day }}" tabindex="-1">
+                                    <div class="modal-dialog modal-lg">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">{{ year }}年{{ month }}月{{ day.day }}日 入住计划</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <table class="table table-sm">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>部门</th>
+                                                            <th>团体名称</th>
+                                                            <th>入住时间</th>
+                                                            <th>离开时间</th>
+                                                            <th>人数</th>
+                                                            <th>房间数</th>
+                                                            <th>状态</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for r in day.reservations %}
+                                                        <tr>
+                                                            <td>{{ r.department or '-' }}</td>
+                                                            <td>{{ r.group_name or r.student_name or '-' }}</td>
+                                                            <td>{{ r.check_in_date }}</td>
+                                                            <td>{{ r.check_out_date or '-' }}</td>
+                                                            <td>{{ r.person_count }}</td>
+                                                            <td>{{ r.rooms_needed }}</td>
+                                                            <td>
+                                                                {% if r.status == 'pending' %}
+                                                                    <span class="badge bg-warning">待确认</span>
+                                                                {% elif r.status == 'confirmed' %}
+                                                                    <span class="badge bg-success">已确认</span>
+                                                                {% else %}
+                                                                    <span class="badge bg-secondary">已取消</span>
+                                                                {% endif %}
+                                                            </td>
+                                                        </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% else %}
-        <div class="text-center py-5 text-muted">
-            <i class="bi bi-calendar" style="font-size: 3rem;"></i>
-            <p class="mt-3 mb-0">暂无入住计划</p>
-            <a href="{{ url_for('reservations.add') }}" class="btn btn-primary mt-3">添加入住计划</a>
+        
+        <!-- 图例 -->
+        <div class="mt-3">
+            <small class="text-muted">
+                <i class="bi bi-info-circle me-1"></i> 图例：
+                <span class="badge bg-success">充足</span> 剩余房间 ≥ 5
+                <span class="badge bg-warning">紧张</span> 剩余房间 < 5
+                <span class="badge bg-danger">满房/缺房</span> 剩余房间 = 0 或 已超额
+            </small>
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
