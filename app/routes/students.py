@@ -8,7 +8,7 @@ from app import db
 from app.models import Student, Room, FeeStandard, FeeRecord, Alert
 from datetime import datetime, date, timedelta
 from werkzeug.utils import secure_filename
-import pandas as pd
+from openpyxl import load_workbook
 import os
 
 bp = Blueprint('students', __name__, url_prefix='/students')
@@ -69,11 +69,9 @@ def add():
     """添加学生"""
     form = StudentForm()
     
-    # 填充房间选择
     available_rooms = Room.query.filter(Room.current_occupancy < Room.capacity).all()
     form.room_id.choices = [(0, '未分配')] + [(r.id, f'{r.building}-{r.room_number}') for r in available_rooms]
     
-    # 填充收费标准选择
     fee_standards = FeeStandard.query.filter_by(is_active=True).all()
     form.fee_standard_id.choices = [(0, '未选择')] + [(f.id, f'{f.name} ({f.price}/{f.unit})') for f in fee_standards]
     
@@ -98,26 +96,24 @@ def add():
         db.session.add(student)
         db.session.commit()
         
-        flash(f'学生 {student.name} 添加成功！', 'success')
+        flash('学生添加成功！', 'success')
         return redirect(url_for('students.index'))
     
     return render_template('students/add.html', title='添加学生', form=form)
 
 
-@bp.route('/edit/<int:student_id>', methods=['GET', 'POST'])
+@bp.route('/edit/<int:id>', methods=['GET', 'POST'])
 @login_required
-def edit(student_id):
+def edit(id):
     """编辑学生"""
-    student = Student.query.get_or_404(student_id)
+    student = Student.query.get_or_404(id)
     form = StudentForm(obj=student)
     
-    # 填充房间选择
     available_rooms = Room.query.filter(
         (Room.current_occupancy < Room.capacity) | (Room.id == student.room_id)
     ).all()
-    form.room_id.choices = [(0, '未分配')] + [(r.id, f'{r.building}-{r.room_number} ({r.available_beds}床位)') for r in available_rooms]
+    form.room_id.choices = [(0, '未分配')] + [(r.id, f'{r.building}-{r.room_number}') for r in available_rooms]
     
-    # 填充收费标准选择
     fee_standards = FeeStandard.query.filter_by(is_active=True).all()
     form.fee_standard_id.choices = [(0, '未选择')] + [(f.id, f'{f.name} ({f.price}/{f.unit})') for f in fee_standards]
     
@@ -132,17 +128,13 @@ def edit(student_id):
         if student.fee_standard_id == 0:
             student.fee_standard_id = None
         
-        # 处理房间变更
         if old_room_id != student.room_id:
-            # 退还原房间
             if old_room_id:
                 old_room = Room.query.get(old_room_id)
                 if old_room:
                     old_room.current_occupancy -= 1
-                    if old_room.current_occupancy < old_room.capacity:
-                        old_room.status = 'available'
+                    old_room.status = 'available'
             
-            # 分配新房间
             if student.room_id:
                 new_room = Room.query.get(student.room_id)
                 if new_room:
@@ -151,42 +143,29 @@ def edit(student_id):
                         new_room.status = 'full'
         
         db.session.commit()
-        flash(f'学生 {student.name} 信息已更新！', 'success')
+        flash('学生信息更新成功！', 'success')
         return redirect(url_for('students.index'))
     
     return render_template('students/edit.html', title='编辑学生', form=form, student=student)
 
 
-@bp.route('/delete/<int:student_id>', methods=['POST'])
+@bp.route('/delete/<int:id>', methods=['POST'])
 @login_required
-def delete(student_id):
-    """删除学生"""
-    student = Student.query.get_or_404(student_id)
+def delete(id):
+    """删除学生（归档）"""
+    student = Student.query.get_or_404(id)
+    student.status = 'archived'
+    student.actual_leave_date = date.today()
     
-    # 释放房间床位
     if student.room_id:
         room = Room.query.get(student.room_id)
         if room:
             room.current_occupancy -= 1
-            if room.current_occupancy < room.capacity:
-                room.status = 'available'
+            room.status = 'available'
     
-    db.session.delete(student)
     db.session.commit()
-    
-    flash(f'学生 {student.name} 已删除', 'success')
+    flash('学生已归档！', 'success')
     return redirect(url_for('students.index'))
-
-
-@bp.route('/detail/<int:student_id>')
-@login_required
-def detail(student_id):
-    """学生详情"""
-    student = Student.query.get_or_404(student_id)
-    fee_records = FeeRecord.query.filter_by(student_id=student_id).order_by(FeeRecord.payment_date.desc()).all()
-    
-    return render_template('students/detail.html', title=f'{student.name} - 详情', 
-                         student=student, fee_records=fee_records)
 
 
 @bp.route('/batch-import', methods=['GET', 'POST'])
@@ -203,98 +182,62 @@ def batch_import():
             flash('请选择要上传的文件', 'danger')
             return redirect(request.url)
         
-        if not allowed_file(file.filename):
+        if not file.filename.endswith(('.xlsx', '.xls')):
             flash('只支持 Excel 文件 (.xlsx, .xls)', 'danger')
             return redirect(request.url)
         
         try:
-            # 保存文件
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
+            wb = load_workbook(file)
+            ws = wb.active
             
-            # 读取Excel
-            df = pd.read_excel(filepath)
+            headers = [cell.value for cell in ws[1] if cell.value]
             
-            # 清理列名（去除空格等）
-            df.columns = df.columns.str.strip()
+            success_count = 0
+            error_count = 0
             
-            # 验证必要列
-            required_cols = ['姓名']
-            missing_cols = [col for col in required_cols if col not in df.columns]
-            if missing_cols:
-                flash(f'缺少必要列: {", ".join(missing_cols)}', 'danger')
-                return redirect(request.url)
-            
-            # 导入学生
-            imported = 0
-            errors = []
-            
-            for idx, row in df.iterrows():
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if not row[0]:
+                    continue
+                
+                row_data = dict(zip(headers, row))
+                
                 try:
                     student = Student()
-                    student.name = str(row.get('姓名', '')).strip()
+                    student.name = row_data.get('姓名', '')
+                    student.student_id = row_data.get('学号', '')
+                    student.gender = row_data.get('性别', '')
+                    student.nationality = row_data.get('国籍', '')
+                    student.passport_number = row_data.get('护照号码', '')
+                    student.phone = row_data.get('手机号', '')
+                    student.email = row_data.get('邮箱', '')
+                    student.id_card = row_data.get('身份证号', '')
+                    student.major = row_data.get('专业', '')
+                    student.grade = row_data.get('年级', '')
                     
-                    if not student.name:
-                        errors.append(f'第{idx+2}行: 姓名为空')
-                        continue
+                    if row_data.get('入住日期'):
+                        if isinstance(row_data['入住日期'], date):
+                            student.check_in_date = row_data['入住日期']
+                        else:
+                            student.check_in_date = datetime.strptime(str(row_data['入住日期']), '%Y-%m-%d').date()
                     
-                    student.student_id = str(row.get('学号', '')).strip() or None
-                    student.gender = str(row.get('性别', '')).strip() or None
-                    student.nationality = str(row.get('国籍', '')).strip() or None
-                    student.passport_number = str(row.get('护照号码', '')).strip() or None
-                    student.phone = str(row.get('手机号', '')).strip() or None
-                    student.email = str(row.get('邮箱', '')).strip() or None
-                    student.id_card = str(row.get('身份证号', '')).strip() or None
-                    student.major = str(row.get('专业', '')).strip() or None
-                    student.grade = str(row.get('年级', '')).strip() or None
-                    student.notes = str(row.get('备注', '')).strip() or None
+                    if row_data.get('预计离开日期'):
+                        if isinstance(row_data['预计离开日期'], date):
+                            student.check_out_date = row_data['预计离开日期']
+                        else:
+                            student.check_out_date = datetime.strptime(str(row_data['预计离开日期']), '%Y-%m-%d').date()
+                    
+                    student.notes = row_data.get('备注', '')
                     student.status = 'active'
                     
-                    # 处理房间分配
-                    room_info = str(row.get('房间号', '')).strip()
-                    if room_info:
-                        room = Room.query.filter(
-                            (Room.building + '-' + Room.room_number == room_info) |
-                            (Room.room_number == room_info)
-                        ).first()
-                        if room and room.is_available:
-                            student.room_id = room.id
-                            room.current_occupancy += 1
-                            if room.current_occupancy >= room.capacity:
-                                room.status = 'full'
-                    
-                    # 处理收费标准
-                    fee_name = str(row.get('收费标准', '')).strip()
-                    if fee_name:
-                        fee_std = FeeStandard.query.filter(
-                            (FeeStandard.name == fee_name) |
-                            (FeeStandard.name.contains(fee_name))
-                        ).first()
-                        if fee_std:
-                            student.fee_standard_id = fee_std.id
-                    
                     db.session.add(student)
-                    imported += 1
+                    success_count += 1
                     
                 except Exception as e:
-                    errors.append(f'第{idx+2}行: {str(e)}')
+                    error_count += 1
+                    continue
             
             db.session.commit()
-            
-            # 清理上传文件
-            os.remove(filepath)
-            
-            message = f'成功导入 {imported} 名学生'
-            if errors:
-                message += f'，失败 {len(errors)} 条'
-                flash(message, 'warning')
-                # 可以返回错误详情
-                for err in errors[:10]:  # 只显示前10条
-                    flash(err, 'info')
-            else:
-                flash(message, 'success')
-            
+            flash(f'导入完成！成功: {success_count} 条，失败: {error_count} 条', 'success')
             return redirect(url_for('students.index'))
             
         except Exception as e:
@@ -304,46 +247,14 @@ def batch_import():
     return render_template('students/batch_import.html', title='批量导入学生')
 
 
-@bp.route('/export-template')
+@bp.route('/<int:id>/fees')
 @login_required
-def export_template():
-    """导出导入模板"""
-    # 创建模板DataFrame
-    template = pd.DataFrame({
-        '姓名': [''],
-        '学号': [''],
-        '性别': ['', '男', '女'],
-        '国籍': [''],
-        '护照号码': [''],
-        '手机号': [''],
-        '邮箱': [''],
-        '身份证号': [''],
-        '专业': [''],
-        '年级': [''],
-        '房间号': [''],
-        '收费标准': [''],
-        '备注': ['']
-    })
-    
-    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'student_import_template.xlsx')
-    template.to_excel(filepath, index=False)
-    
-    from flask import send_file
-    return send_file(filepath, as_attachment=True, download_name='student_import_template.xlsx')
-
-
-@bp.route('/<int:student_id>/fees')
-@login_required
-def student_fees(student_id):
+def student_fees(id):
     """学生缴费记录"""
-    student = Student.query.get_or_404(student_id)
-    fee_records = FeeRecord.query.filter_by(student_id=student_id).order_by(FeeRecord.payment_date.desc()).all()
+    student = Student.query.get_or_404(id)
+    fee_records = FeeRecord.query.filter_by(student_id=id).order_by(FeeRecord.payment_date.desc()).all()
     
-    return render_template('students/student_fees.html', title=f'{student.name} - 缴费记录',
-                         student=student, fee_records=fee_records)
-
-
-def allowed_file(filename):
-    """检查文件扩展名"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+    return render_template('students/student_fees.html', 
+                         title=f'{student.name} - 缴费记录',
+                         student=student,
+                         fee_records=fee_records)

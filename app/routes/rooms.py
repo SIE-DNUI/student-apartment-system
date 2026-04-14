@@ -7,7 +7,7 @@ from app import db
 from app.models import Room, FeeStandard, Student
 from datetime import datetime
 from werkzeug.utils import secure_filename
-import pandas as pd
+from openpyxl import load_workbook
 import os
 
 bp = Blueprint('rooms', __name__, url_prefix='/rooms')
@@ -49,7 +49,6 @@ def index():
     
     rooms = pagination.items
     
-    # 获取所有楼栋
     buildings = db.session.query(Room.building).distinct().all()
     buildings = [b[0] for b in buildings]
     
@@ -68,12 +67,10 @@ def add():
     """添加房间"""
     form = RoomForm()
     
-    # 填充收费标准选择
     fee_standards = FeeStandard.query.filter_by(is_active=True).all()
     form.fee_standard_id.choices = [(0, '未选择')] + [(f.id, f'{f.name} ({f.price}/{f.unit})') for f in fee_standards]
     
     if form.validate_on_submit():
-        # 检查房间是否已存在
         existing = Room.query.filter_by(
             building=form.building.data,
             room_number=form.room_number.data
@@ -106,12 +103,10 @@ def edit(room_id):
     room = Room.query.get_or_404(room_id)
     form = RoomForm(obj=room)
     
-    # 填充收费标准选择
     fee_standards = FeeStandard.query.filter_by(is_active=True).all()
     form.fee_standard_id.choices = [(0, '未选择')] + [(f.id, f'{f.name} ({f.price}/{f.unit})') for f in fee_standards]
     
     if form.validate_on_submit():
-        # 检查房间是否已存在（排除自己）
         existing = Room.query.filter(
             Room.building == form.building.data,
             Room.room_number == form.room_number.data,
@@ -122,7 +117,6 @@ def edit(room_id):
             flash(f'房间 {form.building.data}-{form.room_number.data} 已存在', 'danger')
             return redirect(url_for('rooms.edit', room_id=room_id))
         
-        # 记录旧容量
         old_capacity = room.capacity
         
         form.populate_obj(room)
@@ -130,7 +124,6 @@ def edit(room_id):
         if room.fee_standard_id == 0:
             room.fee_standard_id = None
         
-        # 如果容量变更
         if old_capacity != room.capacity:
             room.current_occupancy = min(room.current_occupancy, room.capacity)
             if room.current_occupancy >= room.capacity:
@@ -187,47 +180,39 @@ def batch_add():
             flash('请选择要上传的文件', 'danger')
             return redirect(request.url)
         
-        if not allowed_file(file.filename):
+        if not file.filename.endswith(('.xlsx', '.xls')):
             flash('只支持 Excel 文件 (.xlsx, .xls)', 'danger')
             return redirect(request.url)
         
         try:
-            # 保存文件
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
+            wb = load_workbook(file)
+            ws = wb.active
             
-            # 读取Excel
-            df = pd.read_excel(filepath)
-            df.columns = df.columns.str.strip()
+            headers = [cell.value for cell in ws[1] if cell.value]
             
-            # 验证必要列
-            required_cols = ['楼号', '房间号', '容量']
-            missing_cols = [col for col in required_cols if col not in df.columns]
-            if missing_cols:
-                flash(f'缺少必要列: {", ".join(missing_cols)}', 'danger')
-                return redirect(request.url)
+            success_count = 0
+            skip_count = 0
+            error_count = 0
             
-            # 导入房间
-            imported = 0
-            skipped = 0
-            errors = []
-            
-            for idx, row in df.iterrows():
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if not row[0]:
+                    continue
+                
+                row_data = dict(zip(headers, row))
+                
                 try:
-                    building = str(row.get('楼号', '')).strip()
-                    room_number = str(row.get('房间号', '')).strip()
-                    capacity = int(row.get('容量', 2))
-                    floor = int(row.get('楼层', 1)) if pd.notna(row.get('楼层')) else None
+                    building = str(row_data.get('楼号', '')).strip()
+                    room_number = str(row_data.get('房间号', '')).strip()
+                    capacity = int(row_data.get('容量', 2))
+                    floor = row_data.get('楼层')
                     
                     if not building or not room_number:
-                        errors.append(f'第{idx+2}行: 楼号或房间号为空')
+                        error_count += 1
                         continue
                     
-                    # 检查是否已存在
                     existing = Room.query.filter_by(building=building, room_number=room_number).first()
                     if existing:
-                        skipped += 1
+                        skip_count += 1
                         continue
                     
                     room = Room(
@@ -238,8 +223,7 @@ def batch_add():
                         status='available'
                     )
                     
-                    # 收费标准
-                    fee_name = str(row.get('收费标准', '')).strip()
+                    fee_name = str(row_data.get('收费标准', '')).strip()
                     if fee_name:
                         fee_std = FeeStandard.query.filter(
                             (FeeStandard.name == fee_name) |
@@ -249,25 +233,14 @@ def batch_add():
                             room.fee_standard_id = fee_std.id
                     
                     db.session.add(room)
-                    imported += 1
+                    success_count += 1
                     
                 except Exception as e:
-                    errors.append(f'第{idx+2}行: {str(e)}')
+                    error_count += 1
+                    continue
             
             db.session.commit()
-            os.remove(filepath)
-            
-            message = f'成功添加 {imported} 个房间'
-            if skipped > 0:
-                message += f'，跳过 {skipped} 个已存在的房间'
-            if errors:
-                message += f'，失败 {len(errors)} 条'
-                flash(message, 'warning')
-                for err in errors[:10]:
-                    flash(err, 'info')
-            else:
-                flash(message, 'success')
-            
+            flash(f'导入完成！成功: {success_count}, 跳过(已存在): {skip_count}, 失败: {error_count}', 'success')
             return redirect(url_for('rooms.index'))
             
         except Exception as e:
@@ -280,145 +253,94 @@ def batch_add():
 @bp.route('/batch-edit', methods=['GET', 'POST'])
 @login_required
 def batch_edit():
-    """批量编辑房间"""
+    """批量修改房间"""
     if request.method == 'POST':
-        action = request.form.get('action')
+        if 'file' not in request.files:
+            flash('请选择要上传的文件', 'danger')
+            return redirect(request.url)
         
-        if action == 'update':
-            # 批量更新操作
-            room_ids = request.form.getlist('room_ids')
-            update_field = request.form.get('update_field')
-            update_value = request.form.get('update_value')
-            
-            if not room_ids:
-                flash('请选择要更新的房间', 'danger')
-                return redirect(url_for('rooms.batch_edit'))
-            
-            rooms = Room.query.filter(Room.id.in_(room_ids)).all()
-            
-            for room in rooms:
-                if update_field == 'building':
-                    room.building = update_value
-                elif update_field == 'fee_standard_id':
-                    if update_value:
-                        room.fee_standard_id = int(update_value)
-                elif update_field == 'capacity':
-                    new_capacity = int(update_value)
-                    if new_capacity < room.current_occupancy:
-                        flash(f'房间 {room.building}-{room.room_number} 入住人数大于新容量，跳过', 'warning')
-                        continue
-                    room.capacity = new_capacity
-                    if room.current_occupancy >= room.capacity:
-                        room.status = 'full'
-                    else:
-                        room.status = 'available'
-            
-            db.session.commit()
-            flash(f'已更新 {len(rooms)} 个房间', 'success')
-            return redirect(url_for('rooms.index'))
+        file = request.files['file']
+        if file.filename == '':
+            flash('请选择要上传的文件', 'danger')
+            return redirect(request.url)
         
-        elif action == 'quick':
-            # 快速批量设置
-            building_prefix = request.form.get('building_prefix', '').strip()
-            start_room = request.form.get('start_room', '').strip()
-            end_room = request.form.get('end_room', '').strip()
-            capacity = request.form.get('quick_capacity', 2, type=int)
-            floor = request.form.get('quick_floor', type=int)
-            fee_standard_id = request.form.get('quick_fee_standard_id', type=int)
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            flash('只支持 Excel 文件 (.xlsx, .xls)', 'danger')
+            return redirect(request.url)
+        
+        try:
+            wb = load_workbook(file)
+            ws = wb.active
             
-            if building_prefix and start_room and end_room:
+            headers = [cell.value for cell in ws[1] if cell.value]
+            
+            success_count = 0
+            error_count = 0
+            
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if not row[0]:
+                    continue
+                
+                row_data = dict(zip(headers, row))
+                
                 try:
-                    # 生成房间号范围
-                    start_num = int(''.join(filter(str.isdigit, start_room))) or 1
-                    end_num = int(''.join(filter(str.isdigit, end_room))) or start_num
-                    prefix = ''.join(filter(str.isalpha, start_room))
+                    building = str(row_data.get('楼号', '')).strip()
+                    room_number = str(row_data.get('房间号', '')).strip()
                     
-                    rooms_added = 0
-                    for num in range(start_num, end_num + 1):
-                        room_number = f'{prefix}{num}'
-                        existing = Room.query.filter_by(
-                            building=building_prefix, 
-                            room_number=room_number
-                        ).first()
-                        
-                        if not existing:
-                            room = Room(
-                                building=building_prefix,
-                                room_number=room_number,
-                                capacity=capacity,
-                                floor=floor,
-                                status='available'
-                            )
-                            if fee_standard_id:
-                                room.fee_standard_id = fee_standard_id
-                            db.session.add(room)
-                            rooms_added += 1
+                    room = Room.query.filter_by(building=building, room_number=room_number).first()
+                    if not room:
+                        error_count += 1
+                        continue
                     
-                    db.session.commit()
-                    flash(f'成功创建 {rooms_added} 个房间', 'success')
-                    return redirect(url_for('rooms.index'))
+                    if row_data.get('新房间号'):
+                        room.room_number = str(row_data['新房间号']).strip()
+                    if row_data.get('容量'):
+                        room.capacity = int(row_data['容量'])
+                    if row_data.get('楼层'):
+                        room.floor = int(row_data['楼层'])
+                    if row_data.get('备注'):
+                        room.description = str(row_data['备注'])
+                    
+                    success_count += 1
                     
                 except Exception as e:
-                    flash(f'操作失败: {str(e)}', 'danger')
+                    error_count += 1
+                    continue
+            
+            db.session.commit()
+            flash(f'修改完成！成功: {success_count}, 失败: {error_count}', 'success')
+            return redirect(url_for('rooms.index'))
+            
+        except Exception as e:
+            flash(f'修改失败: {str(e)}', 'danger')
+            return redirect(request.url)
     
-    # 获取所有房间（用于选择）
-    rooms = Room.query.order_by(Room.building, Room.room_number).all()
-    buildings = db.session.query(Room.building).distinct().all()
-    buildings = [b[0] for b in buildings]
-    
-    fee_standards = FeeStandard.query.filter_by(is_active=True).all()
-    
-    return render_template('rooms/batch_edit.html', title='批量编辑房间',
-                         rooms=rooms, buildings=buildings, fee_standards=fee_standards)
-
-
-@bp.route('/export-template')
-@login_required
-def export_template():
-    """导出房间导入模板"""
-    template = pd.DataFrame({
-        '楼号': [''],
-        '房间号': [''],
-        '容量': [2],
-        '楼层': [1],
-        '收费标准': ['']
-    })
-    
-    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'room_import_template.xlsx')
-    template.to_excel(filepath, index=False)
-    
-    from flask import send_file
-    return send_file(filepath, as_attachment=True, download_name='room_import_template.xlsx')
+    return render_template('rooms/batch_edit.html', title='批量修改房间')
 
 
 @bp.route('/status')
 @login_required
 def status():
     """房间状态统计"""
-    from sqlalchemy import func
+    total_rooms = Room.query.count()
+    total_capacity = db.session.query(db.func.sum(Room.capacity)).scalar() or 0
+    total_occupancy = db.session.query(db.func.sum(Room.current_occupancy)).scalar() or 0
     
-    # 按楼栋统计
-    building_stats = db.session.query(
+    available_rooms = Room.query.filter(Room.current_occupancy < Room.capacity).count()
+    full_rooms = Room.query.filter(Room.current_occupancy >= Room.capacity).count()
+    
+    buildings = db.session.query(
         Room.building,
-        func.count(Room.id).label('total'),
-        func.sum(Room.capacity).label('total_capacity'),
-        func.sum(Room.current_occupancy).label('total_occupancy'),
-        func.sum(db.case((Room.current_occupancy < Room.capacity, 1), else_=0)).label('available')
+        db.func.count(Room.id).label('room_count'),
+        db.func.sum(Room.capacity).label('total_capacity'),
+        db.func.sum(Room.current_occupancy).label('current_occupancy')
     ).group_by(Room.building).all()
     
-    # 总体统计
-    total_rooms = Room.query.count()
-    total_capacity = db.session.query(func.sum(Room.capacity)).scalar() or 0
-    total_occupancy = db.session.query(func.sum(Room.current_occupancy)).scalar() or 0
-    
-    return render_template('rooms/status.html', title='房间状态统计',
-                         building_stats=building_stats,
+    return render_template('rooms/status.html',
+                         title='房间状态',
                          total_rooms=total_rooms,
                          total_capacity=total_capacity,
-                         total_occupancy=total_occupancy)
-
-
-def allowed_file(filename):
-    """检查文件扩展名"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+                         total_occupancy=total_occupancy,
+                         available_rooms=available_rooms,
+                         full_rooms=full_rooms,
+                         buildings=buildings)
