@@ -329,7 +329,7 @@ def batch_edit():
             if building_prefix and start_room and end_room:
                 try:
                     # 生成房间号范围
-                    start_num = int(''.join(filter(str.isdigit, start_room))) or 1)
+                    start_num = int(''.join(filter(str.isdigit, start_room))) or 1
                     end_num = int(''.join(filter(str.isdigit, end_room))) or start_num
                     prefix = ''.join(filter(str.isalpha, start_room))
                     

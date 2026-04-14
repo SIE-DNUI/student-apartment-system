@@ -302,21 +302,21 @@ def reminders():
         Student.payment_due_date != None,
         Student.payment_due_date <= today + timedelta(days=reminder_days),
         Student.payment_due_date >= today,
-        Student.status = 'active'
+        Student.status == 'active'
     ).order_by(Student.payment_due_date).all()
     
     # 已过期
     overdue = Student.query.filter(
         Student.payment_due_date != None,
         Student.payment_due_date < today,
-        Student.status = 'active'
+        Student.status == 'active'
     ).order_by(Student.payment_due_date.desc()).all()
     
     # 未设置到期日期
     no_due_date = Student.query.filter(
         Student.payment_due_date == None,
         Student.room_id != None,
-        Student.status = 'active'
+        Student.status == 'active'
     ).all()
     
     return render_template('fees/reminders.html', title='缴费提醒',
@@ -341,7 +341,7 @@ def generate_alerts():
         Student.payment_due_date != None,
         Student.payment_due_date <= today + timedelta(days=reminder_days),
         Student.payment_due_date >= today,
-        Student.status = 'active'
+        Student.status == 'active'
     ).all()
     
     for student in students_due_soon:
@@ -360,7 +360,7 @@ def generate_alerts():
     students_overdue = Student.query.filter(
         Student.payment_due_date != None,
         Student.payment_due_date < today,
-        Student.status = 'active'
+        Student.status == 'active'
     ).all()
     
     for student in students_overdue:
