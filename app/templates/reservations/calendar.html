@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}入住计划日历{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-calendar3 me-2"></i>入住计划日历</h5>
+    </div>
+    <div class="card-body">
+        {% if events %}
+        <div class="table-responsive">
+            <table class="table table-bordered calendar-table">
+                <thead class="table-light">
+                    <tr>
+                        <th width="15%">日期</th>
+                        <th width="25%">事件</th>
+                        <th width="15%">类型</th>
+                        <th>备注</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in events %}
+                    <tr class="{{ 'table-success' if '入住' in event.title else 'table-secondary' if '退房' in event.title else '' }}">
+                        <td><strong>{{ event.date }}</strong></td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if '入住' in event.title else 'secondary' }}">
+                                {{ event.title }}
+                            </span>
+                        </td>
+                        <td>{{ '入住' if event.beds > 0 else '退房' }}</td>
+                        <td>
+                            {{ event.nationality }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-calendar" style="font-size: 3rem;"></i>
+            <p class="mt-3 mb-0">暂无入住计划</p>
+            <a href="{{ url_for('reservations.add') }}" class="btn btn-primary mt-3">添加入住计划</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

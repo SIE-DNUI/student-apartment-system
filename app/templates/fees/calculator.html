@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}缴费计算器{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-calculator me-2"></i>缴费计算器</h5>
+    </div>
+    <div class="card-body">
+        <form method="GET">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">选择学生</label>
+                    <select name="student_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">请选择学生</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {% if student and s.id == student.id %}selected{% endif %}>
+                            {{ s.name }} ({{ s.student_id or '无学号' }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </form>
+        
+        {% if student %}
+        <hr>
+        
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6>学生信息</h6>
+                        <table class="table table-sm">
+                            <tr><th>姓名</th><td>{{ student.name }}</td></tr>
+                            <tr><th>学号</th><td>{{ student.student_id or '-' }}</td></tr>
+                            <tr><th>房间</th><td>{{ student.room.building }}-{{ student.room.room_number if student.room else '未分配' }}</td></tr>
+                            <tr><th>收费标准</th><td>{{ fee_standard.name if fee_standard else '未设置' }}</td></tr>
+                            {% if fee_standard %}
+                            <tr><th>单价</th><td>¥{{ fee_standard.price }}/{{ fee_standard.unit }}</td></tr>
+                            {% endif %}
+                            <tr><th>当前到期</th>
+                                <td>
+                                    {% if student.payment_due_date %}
+                                    {{ student.payment_due_date }}
+                                    {% else %}
+                                    未设置
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            {% if fee_standard %}
+            <div class="col-md-6">
+                <div class="card bg-primary bg-opacity-10">
+                    <div class="card-body">
+                        <h6>快捷计算</h6>
+                        <div class="row g-2">
+                            {% for months in [1, 2, 3, 6, 12] %}
+                            {% if fee_standard.unit == '月' %}
+                            {% set amount = fee_standard.price * months %}
+                            <div class="col-4">
+                                <a href="{{ url_for('fees.add_record') }}?student_id={{ student.id }}&amount={{ amount }}&periods={{ months }}" 
+                                   class="btn btn-outline-primary w-100">
+                                    {{ months }}个月<br><small>¥{{ amount }}</small>
+                                </a>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if calculated_due_date %}
+        <div class="alert alert-success mt-3">
+            <h5><i class="bi bi-check-circle me-2"></i>计算结果</h5>
+            <p class="mb-1">缴费金额：<strong>¥{{ amount }}</strong></p>
+            <p class="mb-1">对应期间：<strong>{{ fee_standard.unit }}</strong></p>
+            <p class="mb-0">到期日期：<strong class="text-success">{{ calculated_due_date }}</strong></p>
+        </div>
+        {% endif %}
+        
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

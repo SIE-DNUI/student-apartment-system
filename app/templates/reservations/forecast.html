@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}房间预判{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>房间可用性预判</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">预测日期</label>
+                <input type="date" name="target_date" class="form-control" value="{{ target_date or '' }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">需要床位数</label>
+                <input type="number" name="beds_needed" class="form-control" value="{{ beds_needed or 1 }}" min="1" max="100" required>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search me-1"></i> 预测
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if forecast_result %}
+<div class="row g-4">
+    <!-- 总体统计 -->
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-primary">{{ forecast_result.total_rooms }}</h3>
+                <p class="mb-0">总房间数</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-success">{{ forecast_result.total_beds }}</h3>
+                <p class="mb-0">总床位数</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-warning">{{ forecast_result.available_beds }}</h3>
+                <p class="mb-0">可用床位</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-danger">{{ forecast_result.shortage if forecast_result.shortage > 0 else 0 }}</h3>
+                <p class="mb-0">缺床位数</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 预测结果 -->
+<div class="card mt-4">
+    <div class="card-header {{ 'bg-success bg-opacity-10' if forecast_result.is_sufficient else 'bg-danger bg-opacity-10' }}">
+        <h5 class="mb-0">
+            <i class="bi bi-{{ 'check-circle text-success' if forecast_result.is_sufficient else 'x-circle text-danger' }} me-2"></i>
+            预测结果：{{ forecast_result.target_date }}
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if forecast_result.is_sufficient %}
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle me-2"></i>
+            <strong>房间充足！</strong> 预计有 {{ forecast_result.available_beds - forecast_result.beds_needed }} 个空余床位。
+        </div>
+        {% else %}
+        <div class="alert alert-danger">
+            <i class="bi bi-x-circle me-2"></i>
+            <strong>房间不足！</strong> 预计缺少 {{ forecast_result.shortage }} 个床位。建议提前做好准备。
+        </div>
+        {% endif %}
+        
+        <h6 class="mt-4">详细分析</h6>
+        <table class="table table-sm">
+            <tr>
+                <th width="30%">当前已入住</th>
+                <td>{{ forecast_result.current_occupied }} 人</td>
+            </tr>
+            <tr>
+                <th>当天计划入住</th>
+                <td>+ {{ forecast_result.checkin_count }} 人</td>
+            </tr>
+            <tr>
+                <th>当天计划退房</th>
+                <td>- {{ forecast_result.checkout_count }} 人</td>
+            </tr>
+            <tr>
+                <th>净增人数</th>
+                <td>{{ forecast_result.net_beds_needed }} 人</td>
+            </tr>
+            <tr>
+                <th>实际需要</th>
+                <td>{{ forecast_result.beds_needed }} 人</td>
+            </tr>
+        </table>
+        
+        {% if forecast_result.checkin_reservations %}
+        <h6 class="mt-4">当天入住计划</h6>
+        <table class="table table-sm">
+            <thead>
+                <tr><th>姓名</th><th>国籍</th><th>床位数</th></tr>
+            </thead>
+            <tbody>
+                {% for r in forecast_result.checkin_reservations %}
+                <tr>
+                    <td>{{ r.student_name }}</td>
+                    <td>{{ r.nationality or '-' }}</td>
+                    <td>{{ r.beds_needed }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        
+        {% if forecast_result.checkout_students %}
+        <h6 class="mt-4">当天退房学生</h6>
+        <table class="table table-sm">
+            <thead>
+                <tr><th>姓名</th><th>房间</th><th>入住日期</th></tr>
+            </thead>
+            <tbody>
+                {% for s in forecast_result.checkout_students %}
+                <tr>
+                    <td>{{ s.name }}</td>
+                    <td>{{ s.room.building }}-{{ s.room.room_number if s.room else '-' }}</td>
+                    <td>{{ s.check_in_date }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

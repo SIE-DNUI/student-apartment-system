@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}批量导入入住计划{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-upload me-2"></i>批量导入入住计划</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <h6><i class="bi bi-info-circle me-2"></i>导入说明</h6>
+            <ul class="mb-0">
+                <li>上传 Excel 文件（.xlsx 或 .xls 格式）</li>
+                <li>必须包含：学生姓名、计划入住日期</li>
+                <li>可选列：学号、手机号、国籍、性别、计划离开日期、床位数、备注</li>
+                <li>日期格式：YYYY-MM-DD</li>
+            </ul>
+        </div>
+        
+        <div class="mb-4">
+            <h6>Excel模板</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr><th>学生姓名*</th><th>学号</th><th>手机号</th><th>国籍</th><th>性别</th><th>计划入住日期*</th><th>计划离开日期</th><th>床位数</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>张三</td><td>2024001</td><td>13800138000</td><td>中国</td><td>男</td><td>2024-09-01</td><td>2025-01-15</td><td>1</td></tr>
+                        <tr><td>李四</td><td>2024002</td><td></td><td>美国</td><td>女</td><td>2024-09-01</td><td></td><td>1</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <a href="{{ url_for('reservations.export_template') }}" class="btn btn-outline-primary btn-sm mt-2">
+                <i class="bi bi-download me-1"></i> 下载模板
+            </a>
+        </div>
+        
+        <form method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">选择Excel文件</label>
+                <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-upload me-1"></i> 开始导入
+            </button>
+            <a href="{{ url_for('reservations.index') }}" class="btn btn-outline-secondary ms-2">取消</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}编辑房间{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>编辑房间 - {{ room.building }}-{{ room.room_number }}</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.building.label }} <span class="text-danger">*</span></label>
+                    {{ form.building(class="form-control") }}
+                    {% if form.building.errors %}<div class="text-danger small">{{ form.building.errors[0] }}</div>{% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.room_number.label }} <span class="text-danger">*</span></label>
+                    {{ form.room_number(class="form-control") }}
+                    {% if form.room_number.errors %}<div class="text-danger small">{{ form.room_number.errors[0] }}</div>{% endif %}
+                </div>
+                
+                <div class="col-md-4">
+                    <label class="form-label">{{ form.capacity.label }} <span class="text-danger">*</span></label>
+                    {{ form.capacity(class="form-control", min=1, max=10) }}
+                    {% if form.capacity.errors %}<div class="text-danger small">{{ form.capacity.errors[0] }}</div>{% endif %}
+                    <small class="text-muted">当前入住：{{ room.current_occupancy }}人</small>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{{ form.floor.label }}</label>
+                    {{ form.floor(class="form-control") }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{{ form.fee_standard_id.label }}</label>
+                    {{ form.fee_standard_id(class="form-select") }}
+                </div>
+                
+                <div class="col-12">
+                    <label class="form-label">{{ form.description.label }}</label>
+                    {{ form.description(class="form-control", rows=2) }}
+                </div>
+            </div>
+            
+            <div class="alert alert-warning mt-3">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>注意：</strong>当前房间有 {{ room.current_occupancy }} 名学生入住。
+                {% if room.current_occupancy > 0 %}
+                降低容量可能导致数据异常。
+                {% endif %}
+            </div>
+            
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i> 保存修改
+                </button>
+                <a href="{{ url_for('rooms.index') }}" class="btn btn-outline-secondary ms-2">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

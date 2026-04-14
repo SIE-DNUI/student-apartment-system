@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}编辑收费标准{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>编辑收费标准</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.name.label }} <span class="text-danger">*</span></label>
+                    {{ form.name(class="form-control") }}
+                    {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors[0] }}</div>{% endif %}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ form.price.label }} <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text">¥</span>
+                        {{ form.price(class="form-control") }}
+                    </div>
+                    {% if form.price.errors %}<div class="text-danger small">{{ form.price.errors[0] }}</div>{% endif %}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ form.unit.label }} <span class="text-danger">*</span></label>
+                    {{ form.unit(class="form-select") }}
+                </div>
+                
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.is_active.label }}</label>
+                    {{ form.is_active(class="form-select") }}
+                </div>
+                
+                <div class="col-12">
+                    <label class="form-label">{{ form.description.label }}</label>
+                    {{ form.description(class="form-control", rows=2) }}
+                </div>
+            </div>
+            
+            <div class="alert alert-info mt-3">
+                <i class="bi bi-info-circle me-2"></i>
+                当前有 <strong>{{ standard.students.count() }}</strong> 名学生使用此收费标准。
+            </div>
+            
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i> 保存修改
+                </button>
+                <a href="{{ url_for('fees.standards') }}" class="btn btn-outline-secondary ms-2">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

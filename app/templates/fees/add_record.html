@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}添加缴费记录{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>添加缴费记录</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.student_id.label }} <span class="text-danger">*</span></label>
+                    {{ form.student_id(class="form-select") }}
+                    {% if form.student_id.errors %}<div class="text-danger small">{{ form.student_id.errors[0] }}</div>{% endif %}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ form.amount.label }} <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text">¥</span>
+                        {{ form.amount(class="form-control") }}
+                    </div>
+                    {% if form.amount.errors %}<div class="text-danger small">{{ form.amount.errors[0] }}</div>{% endif %}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ form.payment_date.label }} <span class="text-danger">*</span></label>
+                    {{ form.payment_date(class="form-control", type="date") }}
+                    {% if form.payment_date.errors %}<div class="text-danger small">{{ form.payment_date.errors[0] }}</div>{% endif %}
+                </div>
+                
+                <div class="col-md-4">
+                    <label class="form-label">{{ form.payment_method.label }}</label>
+                    {{ form.payment_method(class="form-select") }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{{ form.receipt_number.label }}</label>
+                    {{ form.receipt_number(class="form-control") }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{{ form.operator.label }}</label>
+                    {{ form.operator(class="form-control") }}
+                </div>
+                
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.payment_period_start.label }}</label>
+                    {{ form.payment_period_start(class="form-control", type="date") }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.payment_period_end.label }}</label>
+                    {{ form.payment_period_end(class="form-control", type="date") }}
+                    <small class="text-muted">不填则自动计算</small>
+                </div>
+                
+                <div class="col-12">
+                    <label class="form-label">{{ form.notes.label }}</label>
+                    {{ form.notes(class="form-control", rows=2) }}
+                </div>
+            </div>
+            
+            <div class="alert alert-info mt-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>提示：</strong>缴费后，到期日期将自动更新。
+            </div>
+            
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i> 保存
+                </button>
+                <a href="{{ url_for('fees.records') }}" class="btn btn-outline-secondary ms-2">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

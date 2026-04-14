@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}批量编辑房间{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- 快速批量创建 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>快速批量创建</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="action" value="quick">
+                    
+                    <div class="alert alert-warning">
+                        <small>按房间号范围批量创建房间，例如：1号楼 101-120 创建20个房间</small>
+                    </div>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">楼栋前缀</label>
+                            <input type="text" name="building_prefix" class="form-control" placeholder="如：1号楼" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">起始房间</label>
+                            <input type="text" name="start_room" class="form-control" placeholder="101" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">结束房间</label>
+                            <input type="text" name="end_room" class="form-control" placeholder="120" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">容量</label>
+                            <input type="number" name="quick_capacity" class="form-control" value="2" min="1" max="10">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">楼层</label>
+                            <input type="number" name="quick_floor" class="form-control" value="1" min="1">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">收费标准</label>
+                            <select name="quick_fee_standard_id" class="form-select">
+                                <option value="">不设置</option>
+                                {% for f in fee_standards %}
+                                <option value="{{ f.id }}">{{ f.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary mt-3">
+                        <i class="bi bi-plus-lg me-1"></i> 创建房间
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 批量更新 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pencil-square me-2"></i>批量更新</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="action" value="update">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">选择要更新的房间（勾选）</label>
+                        <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                            {% for room in rooms %}
+                            <div class="form-check">
+                                <input type="checkbox" name="room_ids" value="{{ room.id }}" class="form-check-input" id="room{{ room.id }}">
+                                <label class="form-check-label" for="room{{ room.id }}">
+                                    {{ room.building }}-{{ room.room_number }} ({{ room.current_occupancy }}/{{ room.capacity }})
+                                </label>
+                            </div>
+                            {% else %}
+                            <div class="text-muted">暂无房间</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">更新字段</label>
+                        <select name="update_field" class="form-select" required>
+                            <option value="">请选择</option>
+                            <option value="building">楼栋</option>
+                            <option value="capacity">容量</option>
+                            <option value="fee_standard_id">收费标准</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">新值</label>
+                        <input type="text" name="update_value" class="form-control" placeholder="输入新值" required>
+                        <select name="update_value" class="form-select mt-2" id="fee_standard_select" style="display:none;">
+                            <option value="">请选择</option>
+                            {% for f in fee_standards %}
+                            <option value="{{ f.id }}">{{ f.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-check-lg me-1"></i> 更新选中房间
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelector('select[name="update_field"]').addEventListener('change', function() {
+    var textInput = document.querySelector('input[name="update_value"]');
+    var selectInput = document.getElementById('fee_standard_select');
+    
+    if (this.value === 'fee_standard_id') {
+        textInput.style.display = 'none';
+        textInput.removeAttribute('required');
+        selectInput.style.display = 'block';
+        selectInput.setAttribute('required', 'required');
+    } else {
+        textInput.style.display = 'block';
+        textInput.setAttribute('required', 'required');
+        selectInput.style.display = 'none';
+        selectInput.removeAttribute('required');
+    }
+});
+</script>
+{% endblock %}

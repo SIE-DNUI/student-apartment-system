@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}批量添加房间{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-upload me-2"></i>批量添加房间</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <h6><i class="bi bi-info-circle me-2"></i>批量导入说明</h6>
+            <ul class="mb-0">
+                <li>上传 Excel 文件（.xlsx 或 .xls 格式）</li>
+                <li>必须包含列：楼号、房间号、容量</li>
+                <li>可选列：楼层、收费标准</li>
+                <li>已存在的房间会跳过，不会重复添加</li>
+            </ul>
+        </div>
+        
+        <div class="mb-4">
+            <h6>Excel模板</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr><th>楼号</th><th>房间号</th><th>容量</th><th>楼层</th><th>收费标准</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>1号楼</td><td>101</td><td>2</td><td>1</td><td>标准双人间</td></tr>
+                        <tr><td>1号楼</td><td>102</td><td>2</td><td>1</td><td>标准双人间</td></tr>
+                        <tr><td>2号楼</td><td>201</td><td>4</td><td>2</td><td></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <a href="{{ url_for('rooms.export_template') }}" class="btn btn-outline-primary btn-sm mt-2">
+                <i class="bi bi-download me-1"></i> 下载模板
+            </a>
+        </div>
+        
+        <form method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">选择Excel文件</label>
+                <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-upload me-1"></i> 开始导入
+            </button>
+            <a href="{{ url_for('rooms.index') }}" class="btn btn-outline-secondary ms-2">取消</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

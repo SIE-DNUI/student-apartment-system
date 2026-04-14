@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}{{ student.name }} - 详情{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">学生详情</h5>
+        <div>
+            <a href="{{ url_for('students.edit', student_id=student.id) }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-pencil me-1"></i> 编辑
+            </a>
+            <a href="{{ url_for('students.index') }}" class="btn btn-outline-secondary btn-sm">
+                返回列表
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <h6 class="text-muted mb-3">基本信息</h6>
+                <table class="table table-sm">
+                    <tr><th width="40%">学号</th><td>{{ student.student_id or '-' }}</td></tr>
+                    <tr><th>姓名</th><td>{{ student.name }}</td></tr>
+                    <tr><th>性别</th><td>{{ student.gender or '-' }}</td></tr>
+                    <tr><th>国籍</th><td>{{ student.nationality or '-' }}</td></tr>
+                    <tr><th>护照号</th><td>{{ student.passport_number or '-' }}</td></tr>
+                    <tr><th>手机号</th><td>{{ student.phone or '-' }}</td></tr>
+                    <tr><th>邮箱</th><td>{{ student.email or '-' }}</td></tr>
+                    <tr><th>专业</th><td>{{ student.major or '-' }}</td></tr>
+                    <tr><th>年级</th><td>{{ student.grade or '-' }}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-muted mb-3">住宿信息</h6>
+                <table class="table table-sm">
+                    <tr><th width="40%">房间</th>
+                        <td>
+                            {% if student.room %}
+                            <a href="{{ url_for('rooms.detail', room_id=student.room.id) }}">
+                                {{ student.room.building }}-{{ student.room.room_number }}
+                            </a>
+                            {% else %}未分配{% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>入住日期</th><td>{{ student.check_in_date or '-' }}</td></tr>
+                    <tr><th>预计离开</th><td>{{ student.check_out_date or '-' }}</td></tr>
+                    <tr><th>收费标准</th><td>{{ student.fee_standard.name if student.fee_standard else '-' }}</td></tr>
+                    <tr><th>到期日期</th>
+                        <td>
+                            {% if student.payment_due_date %}
+                                {% if student.is_payment_overdue() %}
+                                <span class="text-danger">{{ student.payment_due_date }} (已过期)</span>
+                                {% else %}
+                                {{ student.payment_due_date }} ({{ student.days_until_due() }}天后)
+                                {% endif %}
+                            {% else %}-{% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>状态</th>
+                        <td>
+                            {% if student.status == 'active' %}
+                            <span class="badge bg-success">在住</span>
+                            {% elif student.status == 'inactive' %}
+                            <span class="badge bg-secondary">离校</span>
+                            {% else %}
+                            <span class="badge bg-info">{{ student.status }}</span>
+                            {% endif %}
+                            
+                            {% if student.is_payment_overdue() %}
+                            <span class="badge bg-danger">欠费</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>备注</th><td>{{ student.notes or '-' }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 缴费记录 -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">缴费记录</h5>
+        <a href="{{ url_for('fees.add_record') }}" class="btn btn-sm btn-success">
+            <i class="bi bi-plus-lg me-1"></i> 添加缴费
+        </a>
+    </div>
+    <div class="card-body p-0">
+        {% if fee_records %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>缴费日期</th>
+                        <th>金额</th>
+                        <th>缴费方式</th>
+                        <th>期间</th>
+                        <th>收据号</th>
+                        <th>经办人</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in fee_records %}
+                    <tr>
+                        <td>{{ record.payment_date }}</td>
+                        <td class="text-success fw-bold">¥{{ record.amount }}</td>
+                        <td>{{ record.payment_method or '-' }}</td>
+                        <td>{{ record.payment_period_start or '-' }} ~ {{ record.payment_period_end or '-' }}</td>
+                        <td>{{ record.receipt_number or '-' }}</td>
+                        <td>{{ record.operator or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-receipt" style="font-size: 2rem;"></i>
+            <p class="mt-2 mb-0">暂无缴费记录</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

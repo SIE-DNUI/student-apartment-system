@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}缴费提醒{% endblock %}
+
+{% block content %}
+<ul class="nav nav-tabs mb-3" id="reminderTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="overdue-tab" data-bs-toggle="tab" data-bs-target="#overdue" type="button">
+            <i class="bi bi-exclamation-triangle text-danger me-1"></i>已过期 ({{ overdue|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="due-soon-tab" data-bs-toggle="tab" data-bs-target="#due-soon" type="button">
+            <i class="bi bi-clock text-warning me-1"></i>即将到期 ({{ due_soon|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="no-date-tab" data-bs-toggle="tab" data-bs-target="#no-date" type="button">
+            <i class="bi bi-question-circle text-info me-1"></i>未设置 ({{ no_due_date|length }})
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="reminderTabContent">
+    <!-- 已过期 -->
+    <div class="tab-pane fade show active" id="overdue" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>已过期</h6>
+                <a href="{{ url_for('fees.generate_alerts') }}" class="btn btn-sm btn-outline-danger">生成提醒</a>
+            </div>
+            <div class="card-body p-0">
+                {% if overdue %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>姓名</th>
+                                <th>房间</th>
+                                <th>到期日期</th>
+                                <th>已过期天数</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in overdue %}
+                            <tr class="table-danger bg-opacity-25">
+                                <td>
+                                    <a href="{{ url_for('students.detail', student_id=student.id) }}">{{ student.name }}</a>
+                                </td>
+                                <td>{{ student.room.building }}-{{ student.room.room_number if student.room else '-' }}</td>
+                                <td>{{ student.payment_due_date }}</td>
+                                <td><span class="badge bg-danger">{{ student.days_until_due()|abs }}天</span></td>
+                                <td>
+                                    <a href="{{ url_for('fees.add_record') }}?student_id={{ student.id }}" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-currency-yuan me-1"></i>缴费
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-success">
+                    <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                    <p class="mt-2 mb-0">暂无过期记录</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 即将到期 -->
+    <div class="tab-pane fade" id="due-soon" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0 text-warning"><i class="bi bi-clock me-2"></i>7天内即将到期</h6>
+            </div>
+            <div class="card-body p-0">
+                {% if due_soon %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>姓名</th>
+                                <th>房间</th>
+                                <th>到期日期</th>
+                                <th>剩余天数</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in due_soon %}
+                            <tr class="table-warning bg-opacity-10">
+                                <td>
+                                    <a href="{{ url_for('students.detail', student_id=student.id) }}">{{ student.name }}</a>
+                                </td>
+                                <td>{{ student.room.building }}-{{ student.room.room_number if student.room else '-' }}</td>
+                                <td>{{ student.payment_due_date }}</td>
+                                <td>
+                                    {% set days = student.days_until_due() %}
+                                    {% if days <= 3 %}
+                                    <span class="badge bg-danger">{{ days }}天</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">{{ days }}天</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('fees.add_record') }}?student_id={{ student.id }}" class="btn btn-sm btn-warning">
+                                        <i class="bi bi-currency-yuan me-1"></i>缴费
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-success">
+                    <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                    <p class="mt-2 mb-0">暂无即将到期的记录</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 未设置 -->
+    <div class="tab-pane fade" id="no-date" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0 text-info"><i class="bi bi-question-circle me-2"></i>未设置到期日期</h6>
+            </div>
+            <div class="card-body p-0">
+                {% if no_due_date %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>姓名</th>
+                                <th>房间</th>
+                                <th>收费标准</th>
+                                <th>入住日期</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in no_due_date %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('students.detail', student_id=student.id) }}">{{ student.name }}</a>
+                                </td>
+                                <td>{{ student.room.building }}-{{ student.room.room_number if student.room else '-' }}</td>
+                                <td>{{ student.fee_standard.name if student.fee_standard else '未设置' }}</td>
+                                <td>{{ student.check_in_date or '-' }}</td>
+                                <td>
+                                    <a href="{{ url_for('students.edit', student_id=student.id) }}" class="btn btn-sm btn-info">
+                                        <i class="bi bi-pencil me-1"></i>编辑
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-success">
+                    <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                    <p class="mt-2 mb-0">所有学生都已设置到期日期</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

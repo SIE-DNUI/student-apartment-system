@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}{{ room.building }}-{{ room.room_number }} - 详情{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-house-door me-2"></i>{{ room.building }}-{{ room.room_number }}
+        </h5>
+        <div>
+            <a href="{{ url_for('rooms.edit', room_id=room.id) }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-pencil me-1"></i> 编辑
+            </a>
+            <a href="{{ url_for('rooms.index') }}" class="btn btn-outline-secondary btn-sm">返回列表</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table table-sm">
+                    <tr>
+                        <th width="40%">楼栋</th>
+                        <td>{{ room.building }}</td>
+                    </tr>
+                    <tr>
+                        <th>房间号</th>
+                        <td>{{ room.room_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>楼层</th>
+                        <td>{{ room.floor or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>房间容量</th>
+                        <td>{{ room.capacity }}人</td>
+                    </tr>
+                    <tr>
+                        <th>当前入住</th>
+                        <td>{{ room.current_occupancy }}人</td>
+                    </tr>
+                    <tr>
+                        <th>剩余床位</th>
+                        <td>
+                            <span class="badge bg-{{ 'success' if room.available_beds > 0 else 'danger' }}">
+                                {{ room.available_beds }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>收费标准</th>
+                        <td>
+                            {% if room.fee_standard %}
+                            {{ room.fee_standard.name }} ({{ room.fee_standard.price }}/{{ room.fee_standard.unit }})
+                            {% else %}未设置{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>状态</th>
+                        <td>
+                            {% if room.status == 'available' %}
+                            <span class="badge bg-success">可用</span>
+                            {% elif room.status == 'full' %}
+                            <span class="badge bg-danger">已满</span>
+                            {% else %}
+                            <span class="badge bg-warning">{{ room.status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>备注</th>
+                        <td>{{ room.description or '-' }}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>入住率</h6>
+                <h2 class="text-{{ 'success' if room.occupancy_rate > 50 else 'warning' if room.occupancy_rate > 0 else 'secondary' }}">
+                    {{ room.occupancy_rate }}%
+                </h2>
+                <div class="progress progress-room mb-3" style="height: 20px;">
+                    <div class="progress-bar bg-{{ 'success' if room.occupancy_rate >= 80 else 'warning' if room.occupancy_rate >= 50 else 'secondary' }}" 
+                         style="width: {{ room.occupancy_rate }}%">
+                        {{ room.current_occupancy }}/{{ room.capacity }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 在住学生 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-people me-2"></i>在住学生</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if students %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>学号</th>
+                        <th>姓名</th>
+                        <th>性别</th>
+                        <th>国籍</th>
+                        <th>手机号</th>
+                        <th>入住日期</th>
+                        <th>到期日期</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td>{{ student.student_id or '-' }}</td>
+                        <td>
+                            <a href="{{ url_for('students.detail', student_id=student.id) }}">
+                                {{ student.name }}
+                            </a>
+                        </td>
+                        <td>{{ student.gender or '-' }}</td>
+                        <td>{{ student.nationality or '-' }}</td>
+                        <td>{{ student.phone or '-' }}</td>
+                        <td>{{ student.check_in_date or '-' }}</td>
+                        <td>
+                            {% if student.payment_due_date %}
+                                {% if student.is_payment_overdue() %}
+                                <span class="text-danger">{{ student.payment_due_date }}</span>
+                                {% else %}
+                                {{ student.payment_due_date }}
+                                {% endif %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('students.detail', student_id=student.id) }}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-person-dash" style="font-size: 2rem;"></i>
+            <p class="mt-2 mb-0">暂无学生入住</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

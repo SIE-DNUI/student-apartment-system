@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}房间状态统计{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>房间状态统计</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-3">
+                <div class="text-center p-3 bg-primary bg-opacity-10 rounded">
+                    <h3 class="text-primary">{{ total_rooms }}</h3>
+                    <p class="mb-0">总房间数</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center p-3 bg-success bg-opacity-10 rounded">
+                    <h3 class="text-success">{{ total_capacity - total_occupancy }}</h3>
+                    <p class="mb-0">可用床位</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center p-3 bg-warning bg-opacity-10 rounded">
+                    <h3 class="text-warning">{{ total_occupancy }}</h3>
+                    <p class="mb-0">已用床位</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center p-3 bg-info bg-opacity-10 rounded">
+                    <h3 class="text-info">{{ total_capacity }}</h3>
+                    <p class="mb-0">总床位数</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">各楼栋统计</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>楼栋</th>
+                        <th>房间数</th>
+                        <th>总容量</th>
+                        <th>已入住</th>
+                        <th>可用</th>
+                        <th>入住率</th>
+                        <th>详细</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in building_stats %}
+                    <tr>
+                        <td><strong>{{ stat.building }}</strong></td>
+                        <td>{{ stat.total }}</td>
+                        <td>{{ stat.total_capacity }}</td>
+                        <td>{{ stat.total_occupancy }}</td>
+                        <td>{{ stat.total_capacity - stat.total_occupancy }}</td>
+                        <td>
+                            {% set rate = (stat.total_occupancy / stat.total_capacity * 100) if stat.total_capacity > 0 else 0 %}
+                            <div class="d-flex align-items-center">
+                                <div class="progress flex-grow-1 me-2" style="height: 10px; width: 100px;">
+                                    <div class="progress-bar bg-{{ 'success' if rate >= 80 else 'warning' if rate >= 50 else 'secondary' }}" 
+                                         style="width: {{ rate }}%"></div>
+                                </div>
+                                <span>{{ rate | round(1) }}%</span>
+                            </div>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('rooms.index', building=stat.building) }}" class="btn btn-sm btn-outline-primary">
+                                查看
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">暂无数据</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}房间管理{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">房间列表</h5>
+        <div>
+            <a href="{{ url_for('rooms.add') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg me-1"></i> 添加房间
+            </a>
+            <a href="{{ url_for('rooms.batch_add') }}" class="btn btn-success btn-sm">
+                <i class="bi bi-upload me-1"></i> 批量添加
+            </a>
+            <a href="{{ url_for('rooms.batch_edit') }}" class="btn btn-info btn-sm">
+                <i class="bi bi-pencil-square me-1"></i> 批量编辑
+            </a>
+            <a href="{{ url_for('rooms.status') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-bar-chart me-1"></i> 统计
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- 筛选 -->
+        <form method="GET" class="row g-3 mb-3">
+            <div class="col-md-3">
+                <select name="building" class="form-select">
+                    <option value="">所有楼栋</option>
+                    {% for b in buildings %}
+                    <option value="{{ b }}" {% if building_filter == b %}selected{% endif %}>{{ b }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="status" class="form-select">
+                    <option value="">所有状态</option>
+                    <option value="available" {% if status_filter == 'available' %}selected{% endif %}>可用</option>
+                    <option value="full" {% if status_filter == 'full' %}selected{% endif %}>已满</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-secondary">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{{ url_for('rooms.index') }}" class="btn btn-outline-danger">重置</a>
+            </div>
+        </form>
+        
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>楼栋</th>
+                        <th>房间号</th>
+                        <th>楼层</th>
+                        <th>容量</th>
+                        <th>入住</th>
+                        <th>剩余</th>
+                        <th>收费标准</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for room in rooms %}
+                    <tr>
+                        <td>{{ room.building }}</td>
+                        <td>
+                            <a href="{{ url_for('rooms.detail', room_id=room.id) }}">
+                                {{ room.room_number }}
+                            </a>
+                        </td>
+                        <td>{{ room.floor or '-' }}</td>
+                        <td>{{ room.capacity }}人</td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if room.current_occupancy > 0 else 'secondary' }}">
+                                {{ room.current_occupancy }}
+                            </span>
+                        </td>
+                        <td>{{ room.available_beds }}</td>
+                        <td>{{ room.fee_standard.name if room.fee_standard else '-' }}</td>
+                        <td>
+                            {% if room.status == 'available' %}
+                            <span class="badge bg-success">可用</span>
+                            {% elif room.status == 'full' %}
+                            <span class="badge bg-danger">已满</span>
+                            {% else %}
+                            <span class="badge bg-warning">{{ room.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('rooms.detail', room_id=room.id) }}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{{ url_for('rooms.edit', room_id=room.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% if room.current_occupancy == 0 %}
+                            <form method="POST" action="{{ url_for('rooms.delete', room_id=room.id) }}" class="d-inline" onsubmit="return confirm('确定要删除该房间吗？')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-muted">
+                            <i class="bi bi-house-door" style="font-size: 2rem;"></i>
+                            <p class="mt-2 mb-0">暂无房间数据</p>
+                            <a href="{{ url_for('rooms.batch_add') }}">批量添加</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %}
+        <nav class="mt-3">
+            <ul class="pagination justify-content-center">
+                {% if pagination.has_prev %}
+                <li class="page-item"><a class="page-link" href="{{ url_for('rooms.index', page=pagination.prev_num, building=building_filter, status=status_filter) }}">上一页</a></li>
+                {% endif %}
+                
+                {% for p in range(1, pagination.pages + 1) %}
+                    {% if p == pagination.page %}
+                    <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                    {% elif p <= 3 or p > pagination.pages - 3 %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('rooms.index', page=p, building=building_filter, status=status_filter) }}">{{ p }}</a></li>
+                    {% elif p == 4 or p == pagination.pages - 3 %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if pagination.has_next %}
+                <li class="page-item"><a class="page-link" href="{{ url_for('rooms.index', page=pagination.next_num, building=building_filter, status=status_filter) }}">下一页</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

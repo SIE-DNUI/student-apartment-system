@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}房间状态总览{% endblock %}
+
+{% block content %}
+{% for building, data in buildings.items() %}
+<div class="card mb-4">
+    <div class="card-header bg-{{ 'success' if data.available_rooms > 0 else 'danger' }} bg-opacity-10">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-building me-2"></i>{{ building }}
+                <span class="badge bg-{{ 'success' if data.available_rooms > 0 else 'danger' }} ms-2">
+                    {{ data.available_rooms }}/{{ data.total_rooms }} 可用
+                </span>
+            </h5>
+            <div>
+                <span class="me-3"><i class="bi bi-people-fill text-primary"></i> {{ data.total_occupancy }}/{{ data.total_capacity }} 人</span>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-2">
+        <div class="progress progress-room mb-3" style="height: 20px;">
+            <div class="progress-bar bg-success" style="width: {{ (data.total_occupancy / data.total_capacity * 100) if data.total_capacity > 0 else 0 }}%">
+                {{ data.total_occupancy }}/{{ data.total_capacity }}
+            </div>
+        </div>
+        <div class="row g-2">
+            {% for room in data.rooms %}
+            <div class="col-md-2 col-4">
+                <div class="room-card {{ 'available' if room.is_available else 'full' }}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong>{{ room.room_number }}</strong>
+                        <span class="badge bg-{{ 'success' if room.is_available else 'danger' }}">
+                            {{ room.current_occupancy }}/{{ room.capacity }}
+                        </span>
+                    </div>
+                    <small class="text-muted">{{ room.available_beds }}床位</small>
+                    <br>
+                    <a href="{{ url_for('rooms.detail', room_id=room.id) }}" class="btn btn-sm btn-link p-0">
+                        <small>查看详情</small>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% if not buildings %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i> 暂无房间数据，请先添加房间。
+    <a href="{{ url_for('rooms.add') }}" class="alert-link">添加房间</a>
+</div>
+{% endif %}
+{% endblock %}

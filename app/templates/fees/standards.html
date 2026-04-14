@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}收费标准{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">收费标准</h5>
+        <div>
+            <a href="{{ url_for('fees.add_standard') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg me-1"></i> 添加标准
+            </a>
+            <a href="{{ url_for('fees.calculator') }}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-calculator me-1"></i> 缴费计算器
+            </a>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>单价</th>
+                        <th>单位</th>
+                        <th>使用学生数</th>
+                        <th>状态</th>
+                        <th>备注</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for standard in fee_standards %}
+                    <tr>
+                        <td><strong>{{ standard.name }}</strong></td>
+                        <td class="text-primary fw-bold">¥{{ standard.price }}</td>
+                        <td>/{{ standard.unit }}</td>
+                        <td>{{ standard.students.count() }}</td>
+                        <td>
+                            {% if standard.is_active %}
+                            <span class="badge bg-success">启用</span>
+                            {% else %}
+                            <span class="badge bg-secondary">停用</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ standard.description or '-' }}</td>
+                        <td>
+                            <a href="{{ url_for('fees.edit_standard', standard_id=standard.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% if standard.students.count() == 0 %}
+                            <form method="POST" action="{{ url_for('fees.delete_standard', standard_id=standard.id) }}" class="d-inline" onsubmit="return confirm('确定要删除吗？')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">
+                            <i class="bi bi-currency-yuan" style="font-size: 2rem;"></i>
+                            <p class="mt-2 mb-0">暂无收费标准</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">缴费计算器</h6>
+            </div>
+            <div class="card-body text-center">
+                <i class="bi bi-calculator text-primary" style="font-size: 2rem;"></i>
+                <p class="mt-2">输入学生和金额，自动计算到期日期</p>
+                <a href="{{ url_for('fees.calculator') }}" class="btn btn-outline-primary btn-sm">使用计算器</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">缴费提醒</h6>
+            </div>
+            <div class="card-body text-center">
+                <i class="bi bi-bell text-warning" style="font-size: 2rem;"></i>
+                <p class="mt-2">查看即将到期和已过期的学生</p>
+                <a href="{{ url_for('fees.reminders') }}" class="btn btn-outline-warning btn-sm">查看提醒</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">缴费记录</h6>
+            </div>
+            <div class="card-body text-center">
+                <i class="bi bi-receipt text-success" style="font-size: 2rem;"></i>
+                <p class="mt-2">查看所有缴费记录</p>
+                <a href="{{ url_for('fees.records') }}" class="btn btn-outline-success btn-sm">查看记录</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
