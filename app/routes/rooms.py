@@ -1,4 +1,4 @@
-from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app
+from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app, send_file
 from flask_login import login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, IntegerField, TextAreaField
@@ -7,8 +7,10 @@ from app.models import db
 from app.models import Room, FeeStandard, Student
 from datetime import datetime
 from werkzeug.utils import secure_filename
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
+from openpyxl.styles import Font, Alignment, PatternFill
 import os
+import io
 
 bp = Blueprint('rooms', __name__, url_prefix='/rooms')
 
@@ -344,3 +346,55 @@ def status():
                          available_rooms=available_rooms,
                          full_rooms=full_rooms,
                          buildings=buildings)
+
+
+@bp.route('/export-template')
+@login_required
+def export_template():
+    """下载房间导入模板"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '房间导入模板'
+    
+    # 表头
+    headers = ['楼号', '房间号', '容量', '楼层', '收费标准']
+    
+    # 设置表头样式
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF')
+    
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+    
+    # 设置列宽
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 12
+    ws.column_dimensions['C'].width = 8
+    ws.column_dimensions['D'].width = 8
+    ws.column_dimensions['E'].width = 15
+    
+    # 添加示例数据
+    sample_data = [
+        ['1号楼', '101', 2, 1, '标准双人间'],
+        ['1号楼', '102', 2, 1, '标准双人间'],
+        ['2号楼', '201', 4, 2, '四人间'],
+    ]
+    
+    for row_idx, row_data in enumerate(sample_data, 2):
+        for col_idx, value in enumerate(row_data, 1):
+            ws.cell(row=row_idx, column=col_idx, value=value)
+    
+    # 保存到内存
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='房间导入模板.xlsx'
+    )
