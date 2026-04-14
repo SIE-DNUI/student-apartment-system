@@ -13,9 +13,9 @@
             <ul class="mb-0">
                 <li>请上传 Excel 文件（.xlsx 或 .xls 格式）</li>
                 <li>Excel 文件必须包含"姓名"列，其他列为可选</li>
-                <li>可选列：学号、性别、国籍、护照号码、手机号、邮箱、身份证号、专业、年级、房间号、收费标准、备注</li>
+                <li>可选列：性别、国籍、护照号码、专业、房间号、收费标准、备注</li>
                 <li>性别只接受：男、女</li>
-                <li>房间号格式：楼号-房间号，如 "1-101" 或 "101"</li>
+                <li>房间号格式：楼号-房间号，如 "1-101"</li>
                 <li>收费标准请填写已设置的标准名称，如"标准双人间"</li>
             </ul>
         </div>
@@ -27,42 +27,33 @@
                     <thead class="table-light">
                         <tr>
                             <th>姓名*</th>
-                            <th>学号</th>
                             <th>性别</th>
                             <th>国籍</th>
                             <th>护照号码</th>
-                            <th>手机号</th>
-                            <th>邮箱</th>
                             <th>专业</th>
-                            <th>年级</th>
                             <th>房间号</th>
                             <th>收费标准</th>
+                            <th>备注</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td>张三</td>
-                            <td>2024001</td>
                             <td>男</td>
                             <td>中国</td>
                             <td></td>
-                            <td>13800138000</td>
-                            <td>zhangsan@example.com</td>
                             <td>计算机科学与技术</td>
-                            <td>2024</td>
                             <td>1-101</td>
                             <td>标准双人间</td>
+                            <td></td>
                         </tr>
                         <tr>
                             <td>李四</td>
-                            <td>2024002</td>
                             <td>女</td>
                             <td>美国</td>
                             <td>P1234567</td>
-                            <td></td>
-                            <td></td>
                             <td>软件工程</td>
-                            <td>2024</td>
+                            <td></td>
                             <td></td>
                             <td></td>
                         </tr>
@@ -70,7 +61,7 @@
                 </table>
             </div>
             <a href="{{ url_for('students.export_template') }}" class="btn btn-outline-primary btn-sm mt-2">
-                <i class="bi bi-download me-1"></i> 下载完整模板
+                <i class="bi bi-download me-1"></i> 下载Excel模板
             </a>
         </div>
         

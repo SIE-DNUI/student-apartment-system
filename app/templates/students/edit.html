@@ -17,44 +17,22 @@
                     {{ form.name(class="form-control") }}
                     {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors[0] }}</div>{% endif %}
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">{{ form.student_id.label }}</label>
-                    {{ form.student_id(class="form-control") }}
-                </div>
-                
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">{{ form.gender.label }}</label>
                     {{ form.gender(class="form-select") }}
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">{{ form.nationality.label }}</label>
                     {{ form.nationality(class="form-control") }}
                 </div>
-                <div class="col-md-4">
+                
+                <div class="col-md-6">
                     <label class="form-label">{{ form.passport_number.label }}</label>
                     {{ form.passport_number(class="form-control") }}
                 </div>
-                
                 <div class="col-md-6">
-                    <label class="form-label">{{ form.phone.label }}</label>
-                    {{ form.phone(class="form-control") }}
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">{{ form.email.label }}</label>
-                    {{ form.email(class="form-control") }}
-                </div>
-                
-                <div class="col-md-4">
                     <label class="form-label">{{ form.major.label }}</label>
                     {{ form.major(class="form-control") }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.grade.label }}</label>
-                    {{ form.grade(class="form-control") }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">{{ form.id_card.label }}</label>
-                    {{ form.id_card(class="form-control") }}
                 </div>
                 
                 <div class="col-md-6">

@@ -1,4 +1,4 @@
-from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app
+from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app, send_file
 from flask_login import login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, DateField, TextAreaField
@@ -8,23 +8,20 @@ from app.models import db
 from app.models import Student, Room, FeeStandard, FeeRecord, Alert
 from datetime import datetime, date, timedelta
 from werkzeug.utils import secure_filename
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 import os
+import io
 
 bp = Blueprint('students', __name__, url_prefix='/students')
 
 
 class StudentForm(FlaskForm):
-    student_id = StringField('学号', validators=[Optional()])
     name = StringField('姓名', validators=[DataRequired(message='请输入姓名')])
     gender = SelectField('性别', choices=[('男', '男'), ('女', '女'), ('其他', '其他')], validators=[Optional()])
     nationality = StringField('国籍', validators=[Optional()])
     passport_number = StringField('护照号码', validators=[Optional()])
-    phone = StringField('手机号', validators=[Optional()])
-    email = StringField('邮箱', validators=[Optional()])
-    id_card = StringField('身份证号', validators=[Optional()])
     major = StringField('专业', validators=[Optional()])
-    grade = StringField('年级', validators=[Optional()])
     room_id = SelectField('分配房间', coerce=int, validators=[Optional()])
     check_in_date = DateField('入住日期', format='%Y-%m-%d', validators=[Optional()])
     check_out_date = DateField('预计离开日期', format='%Y-%m-%d', validators=[Optional()])
@@ -204,15 +201,10 @@ def batch_import():
                 try:
                     student = Student()
                     student.name = row_data.get('姓名', '')
-                    student.student_id = row_data.get('学号', '')
                     student.gender = row_data.get('性别', '')
                     student.nationality = row_data.get('国籍', '')
                     student.passport_number = row_data.get('护照号码', '')
-                    student.phone = row_data.get('手机号', '')
-                    student.email = row_data.get('邮箱', '')
-                    student.id_card = row_data.get('身份证号', '')
                     student.major = row_data.get('专业', '')
-                    student.grade = row_data.get('年级', '')
                     
                     if row_data.get('入住日期'):
                         if isinstance(row_data['入住日期'], date):
@@ -258,3 +250,57 @@ def student_fees(id):
                          title=f'{student.name} - 缴费记录',
                          student=student,
                          fee_records=fee_records)
+
+
+@bp.route('/export-template')
+@login_required
+def export_template():
+    """下载学生导入模板"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '学生导入模板'
+    
+    # 表头
+    headers = ['姓名', '性别', '国籍', '护照号码', '专业', '房间号', '收费标准', '备注']
+    
+    # 设置表头样式
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF')
+    
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+    
+    # 设置列宽
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 8
+    ws.column_dimensions['C'].width = 10
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 15
+    ws.column_dimensions['F'].width = 12
+    ws.column_dimensions['G'].width = 12
+    ws.column_dimensions['H'].width = 20
+    
+    # 添加示例数据
+    sample_data = [
+        ['张三', '男', '中国', '', '计算机科学与技术', '1-101', '标准双人间', ''],
+        ['李四', '女', '美国', 'P1234567', '软件工程', '', '', ''],
+    ]
+    
+    for row_idx, row_data in enumerate(sample_data, 2):
+        for col_idx, value in enumerate(row_data, 1):
+            ws.cell(row=row_idx, column=col_idx, value=value)
+    
+    # 保存到内存
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='学生导入模板.xlsx'
+    )
