@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 上传文件
+uploads/*
+!uploads/.gitkeep
+
+# 实例文件夹
+instance/
+
+# 日志
+*.log
+
+# 环境变量
+.env
+.env.local
+
+# 字节码缓存
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 临时文件
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
