@@ -7,7 +7,7 @@ from flask import render_template, Blueprint, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, FloatField, SelectField, DateField
-from wtforms.validators import DataRequired, Optional, NumberRange
+from wtforms.validators import DataRequired, Optional, NumberRange, InputRequired
 from app.models import db
 from app.models import FeeStandard, FeeRecord, Student, Alert
 from app.decorators import permission_required
@@ -20,7 +20,7 @@ bp = Blueprint('fees', __name__, url_prefix='/fees')
 
 class FeeStandardForm(FlaskForm):
     name = StringField('标准名称', validators=[DataRequired(message='请输入标准名称')])
-    price = FloatField('单价', validators=[DataRequired(message='请输入单价'), NumberRange(min=0)])
+    price = FloatField('单价', validators=[InputRequired(message='请输入单价')])
     unit = SelectField('单位', choices=[('月', '月'), ('学期', '学期'), ('年', '年'), ('天', '天')], validators=[DataRequired()])
     description = StringField('备注说明', validators=[Optional()])
     is_active = SelectField('是否启用', choices=[('1', '是'), ('0', '否')])
