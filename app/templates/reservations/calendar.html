@@ -14,7 +14,7 @@
             <a href="{{ url_for('reservations.calendar', year=year if month > 1 else year-1, month=month-1 if month > 1 else 12) }}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-chevron-left"></i> 上月
             </a>
-            <a href="{{ url_for('reservations.calendar', year=date.today().year, month=date.today().month) }}" class="btn btn-outline-primary btn-sm">
+            <a href="{{ url_for('reservations.calendar', year=today.year, month=today.month) }}" class="btn btn-outline-primary btn-sm">
                 本月
             </a>
             <a href="{{ url_for('reservations.calendar', year=year if month < 12 else year+1, month=month+1 if month < 12 else 1) }}" class="btn btn-outline-secondary btn-sm">

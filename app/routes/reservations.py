@@ -1,4 +1,4 @@
-from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app, jsonify
+from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app, jsonify, send_file
 from flask_login import login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, DateField, IntegerField, TextAreaField
@@ -216,7 +216,8 @@ def calendar():
     return render_template('reservations/calendar.html', title='房间日历',
                          calendar_days=calendar_days,
                          year=year, month=month,
-                         stats=stats, peak_days=peak_days)
+                         stats=stats, peak_days=peak_days,
+                         today=date.today())
 
 
 @bp.route('/api/daily-rooms')
@@ -511,7 +512,7 @@ def template_download():
     wb.save(output)
     output.seek(0)
     
-    return current_app.send_file(
+    return send_file(
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
