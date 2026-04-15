@@ -44,7 +44,8 @@ def index():
     search = request.args.get('search', '')
     filter_status = request.args.get('filter', 'all')  # all, housed, unhoused
     
-    query = Student.query
+    # 排除已归档的学生
+    query = Student.query.filter(Student.status != 'archived')
     
     if search:
         query = query.filter(
@@ -65,8 +66,9 @@ def index():
     
     students = pagination.items
     
-    # 获取居留许可即将到期的学生数量
+    # 获取居留许可即将到期的学生数量（排除已归档）
     expiring_count = Student.query.filter(
+        Student.status != 'archived',
         Student.residence_permit_expiry != None,
         Student.residence_permit_expiry <= date.today() + timedelta(days=30),
         Student.residence_permit_expiry >= date.today()
@@ -173,18 +175,25 @@ def edit(id):
 @login_required
 @permission_required('write')
 def delete(id):
-    """删除学生（归档）"""
+    """删除学生（归档，保留3年）"""
     student = Student.query.get_or_404(id)
-    student.status = 'archived'
     
+    # 释放房间
     if student.room_id:
         room = Room.query.get(student.room_id)
         if room:
             room.current_occupancy -= 1
-            room.status = 'available'
+            if room.current_occupancy < room.capacity:
+                room.status = 'available'
+    
+    # 归档学生信息
+    student.status = 'archived'
+    student.room_id = None
+    student.deleted_at = datetime.utcnow()
+    student.retention_until = date.today() + timedelta(days=365*3)  # 保留3年
     
     db.session.commit()
-    flash('学生已归档！', 'success')
+    flash(f'学生 {student.name} 已删除并归档，将保留至 {student.retention_until}', 'success')
     return redirect(url_for('students.index'))
 
 
@@ -409,3 +418,35 @@ def export_template():
         as_attachment=True,
         download_name='学生导入模板.xlsx'
     )
+
+
+@bp.route('/archived')
+@login_required
+def archived():
+    """归档学生列表（已删除的学生，保留3年）"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    
+    search = request.args.get('search', '')
+    
+    # 查询已归档的学生
+    query = Student.query.filter(Student.status == 'archived')
+    
+    if search:
+        query = query.filter(
+            (Student.name.contains(search)) |
+            (Student.student_id.contains(search)) |
+            (Student.passport_number.contains(search))
+        )
+    
+    pagination = query.order_by(Student.deleted_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    students = pagination.items
+    
+    return render_template('students/archived.html', 
+                         title='归档学生',
+                         students=students,
+                         pagination=pagination,
+                         search=search)

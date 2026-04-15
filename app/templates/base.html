@@ -218,8 +218,11 @@
             </a>
             
             <div class="nav-header">管理模块</div>
-            <a href="{{ url_for('students.index') }}" class="nav-link {% if request.endpoint and 'students' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('students.index') }}" class="nav-link {% if request.endpoint and 'students' in request.endpoint and request.endpoint != 'students.archived' %}active{% endif %}">
                 <i class="bi bi-people me-2"></i> 学生管理
+            </a>
+            <a href="{{ url_for('students.archived') }}" class="nav-link {% if request.endpoint == 'students.archived' %}active{% endif %}">
+                <i class="bi bi-archive me-2"></i> 归档学生
             </a>
             <a href="{{ url_for('rooms.index') }}" class="nav-link {% if request.endpoint and 'rooms' in request.endpoint %}active{% endif %}">
                 <i class="bi bi-house-door me-2"></i> 房间管理

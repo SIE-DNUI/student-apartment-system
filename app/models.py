@@ -128,7 +128,9 @@ class Student(db.Model):
     # 居留许可信息
     residence_permit_expiry = db.Column(db.Date)  # 居留许可到期时间
     
-    status = db.Column(db.String(20), default='active')  # active, inactive, graduated, checked_out
+    status = db.Column(db.String(20), default='active')  # active, inactive, graduated, checked_out, archived
+    deleted_at = db.Column(db.DateTime)  # 删除/归档时间
+    retention_until = db.Column(db.Date)  # 保留截止日期（删除后3年）
     notes = db.Column(db.Text)  # 备注
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

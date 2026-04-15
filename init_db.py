@@ -100,6 +100,25 @@ def migrate():
                 except Exception as e:
                     print(f'× 添加字段失败: students.residence_permit_expiry - {e}')
         
+        # 迁移 Student 表 - 添加归档相关字段
+        if 'deleted_at' not in student_columns:
+            with db.engine.connect() as conn:
+                try:
+                    conn.execute(db.text('ALTER TABLE students ADD COLUMN deleted_at DATETIME'))
+                    conn.commit()
+                    print('✓ 成功添加字段: students.deleted_at')
+                except Exception as e:
+                    print(f'× 添加字段失败: students.deleted_at - {e}')
+        
+        if 'retention_until' not in student_columns:
+            with db.engine.connect() as conn:
+                try:
+                    conn.execute(db.text('ALTER TABLE students ADD COLUMN retention_until DATE'))
+                    conn.commit()
+                    print('✓ 成功添加字段: students.retention_until')
+                except Exception as e:
+                    print(f'× 添加字段失败: students.retention_until - {e}')
+        
         print('字段迁移完成！')
 
 
