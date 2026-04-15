@@ -370,9 +370,10 @@ def student_fees(id):
 @bp.route('/export-template')
 @login_required
 def export_template():
-    """下载学生导入模板"""
+    """下载学生导入模板（带下拉菜单）"""
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill
+    from openpyxl.worksheet.datavalidation import DataValidation
     
     wb = Workbook()
     ws = wb.active
@@ -397,13 +398,62 @@ def export_template():
     ws.column_dimensions['C'].width = 10
     ws.column_dimensions['D'].width = 15
     ws.column_dimensions['E'].width = 15
-    ws.column_dimensions['F'].width = 12
-    ws.column_dimensions['G'].width = 12
+    ws.column_dimensions['F'].width = 15
+    ws.column_dimensions['G'].width = 15
     ws.column_dimensions['H'].width = 20
+    
+    # 获取所有房间号
+    from app.models import Room
+    rooms = Room.query.filter(Room.status != 'archived').all()
+    room_list = [f"{r.building}-{r.room_number}" for r in rooms if r.building and r.room_number]
+    room_options = ','.join(room_list) if room_list else ''
+    
+    # 获取所有收费标准
+    from app.models import FeeStandard
+    fee_standards = FeeStandard.query.filter_by(is_active=True).all()
+    fee_list = [fs.name for fs in fee_standards if fs.name]
+    fee_options = ','.join(fee_list) if fee_list else ''
+    
+    # 添加房间号下拉菜单（F列，第2行到第1000行）
+    if room_options:
+        room_dv = DataValidation(
+            type="list",
+            formula1=f'"{room_options}"',
+            allow_blank=True
+        )
+        room_dv.error = '请从下拉列表中选择房间号'
+        room_dv.errorTitle = '无效的房间号'
+        room_dv.prompt = '请选择房间号'
+        room_dv.promptTitle = '房间号'
+        ws.add_data_validation(room_dv)
+        room_dv.add('F2:F1000')
+    
+    # 添加收费标准下拉菜单（G列，第2行到第1000行）
+    if fee_options:
+        fee_dv = DataValidation(
+            type="list",
+            formula1=f'"{fee_options}"',
+            allow_blank=True
+        )
+        fee_dv.error = '请从下拉列表中选择收费标准'
+        fee_dv.errorTitle = '无效的收费标准'
+        fee_dv.prompt = '请选择收费标准'
+        fee_dv.promptTitle = '收费标准'
+        ws.add_data_validation(fee_dv)
+        fee_dv.add('G2:G1000')
+    
+    # 添加性别下拉菜单（B列）
+    gender_dv = DataValidation(
+        type="list",
+        formula1='"男,女"',
+        allow_blank=True
+    )
+    ws.add_data_validation(gender_dv)
+    gender_dv.add('B2:B1000')
     
     # 添加示例数据
     sample_data = [
-        ['张三', '男', '中国', '', '计算机科学与技术', '1-101', '标准双人间', ''],
+        ['张三', '男', '中国', '', '计算机科学与技术', room_list[0] if room_list else '', fee_list[0] if fee_list else '', ''],
         ['李四', '女', '美国', 'P1234567', '软件工程', '', '', ''],
     ]
     
