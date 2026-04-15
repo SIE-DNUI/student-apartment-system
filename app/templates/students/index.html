@@ -74,7 +74,7 @@
                             </td>
                             <td>{{ student.student_id or '-' }}</td>
                             <td>
-                                <a href="{{ url_for('students.detail', student_id=student.id) }}">
+                                <a href="{{ url_for('students.detail', id=student.id) }}">
                                     {{ student.name }}
                                 </a>
                             </td>
@@ -145,20 +145,20 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="{{ url_for('students.detail', student_id=student.id) }}" class="btn btn-sm btn-outline-info" title="详情">
+                                <a href="{{ url_for('students.detail', id=student.id) }}" class="btn btn-sm btn-outline-info" title="详情">
                                     <i class="bi bi-eye"></i>
                                 </a>
-                                <a href="{{ url_for('students.edit', student_id=student.id) }}" class="btn btn-sm btn-outline-primary" title="编辑">
+                                <a href="{{ url_for('students.edit', id=student.id) }}" class="btn btn-sm btn-outline-primary" title="编辑">
                                     <i class="bi bi-pencil"></i>
                                 </a>
                                 {% if student.room_id %}
-                                <form method="POST" action="{{ url_for('students.checkout', student_id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要为 {{ student.name }} 办理退房吗？')">
+                                <form method="POST" action="{{ url_for('students.checkout', id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要为 {{ student.name }} 办理退房吗？')">
                                     <button type="submit" class="btn btn-sm btn-outline-warning" title="退房">
                                         <i class="bi bi-box-arrow-right"></i>
                                     </button>
                                 </form>
                                 {% endif %}
-                                <form method="POST" action="{{ url_for('students.delete', student_id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要删除该学生吗？')">
+                                <form method="POST" action="{{ url_for('students.delete', id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要删除该学生吗？')">
                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
                                         <i class="bi bi-trash"></i>
                                     </button>
