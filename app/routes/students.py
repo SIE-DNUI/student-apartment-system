@@ -321,17 +321,29 @@ def batch_import():
                     student.passport_number = row_data.get('护照号码', '')
                     student.major = row_data.get('专业', '')
                     
-                    if row_data.get('入住日期'):
-                        if isinstance(row_data['入住日期'], date):
-                            student.check_in_date = row_data['入住日期']
-                        else:
-                            student.check_in_date = datetime.strptime(str(row_data['入住日期']), '%Y-%m-%d').date()
+                    # 处理楼栋号和房间号
+                    building = row_data.get('楼栋号', '')
+                    room_number = row_data.get('房间号', '')
                     
-                    if row_data.get('预计离开日期'):
-                        if isinstance(row_data['预计离开日期'], date):
-                            student.check_out_date = row_data['预计离开日期']
-                        else:
-                            student.check_out_date = datetime.strptime(str(row_data['预计离开日期']), '%Y-%m-%d').date()
+                    if building and room_number:
+                        # 查找对应房间
+                        room = Room.query.filter_by(building=building, room_number=room_number).first()
+                        if room:
+                            if room.current_occupancy < room.capacity:
+                                student.room_id = room.id
+                                room.current_occupancy += 1
+                                if room.current_occupancy >= room.capacity:
+                                    room.status = 'full'
+                            else:
+                                # 房间已满，记录但不分配
+                                pass
+                    
+                    # 处理收费标准
+                    fee_standard_name = row_data.get('收费标准', '')
+                    if fee_standard_name:
+                        fee_standard = FeeStandard.query.filter_by(name=fee_standard_name, is_active=True).first()
+                        if fee_standard:
+                            student.fee_standard_id = fee_standard.id
                     
                     student.notes = row_data.get('备注', '')
                     student.status = 'active'
@@ -352,9 +364,6 @@ def batch_import():
             return redirect(request.url)
     
     return render_template('students/batch_import.html', title='批量导入学生')
-
-
-@bp.route('/<int:id>/fees')
 @login_required
 def student_fees(id):
     """学生缴费记录"""
@@ -379,8 +388,8 @@ def export_template():
     ws = wb.active
     ws.title = '学生导入模板'
     
-    # 表头
-    headers = ['姓名', '性别', '国籍', '护照号码', '专业', '房间号', '收费标准', '备注']
+    # 表头 - 房间号拆成楼栋号和房间号两列
+    headers = ['姓名', '性别', '国籍', '护照号码', '专业', '楼栋号', '房间号', '收费标准', '备注']
     
     # 设置表头样式
     header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
@@ -398,24 +407,44 @@ def export_template():
     ws.column_dimensions['C'].width = 10
     ws.column_dimensions['D'].width = 15
     ws.column_dimensions['E'].width = 15
-    ws.column_dimensions['F'].width = 15
-    ws.column_dimensions['G'].width = 15
-    ws.column_dimensions['H'].width = 20
+    ws.column_dimensions['F'].width = 12
+    ws.column_dimensions['G'].width = 12
+    ws.column_dimensions['H'].width = 15
+    ws.column_dimensions['I'].width = 20
     
-    # 获取所有房间号
+    # 获取所有楼栋号和房间号
     from app.models import Room
     rooms = Room.query.filter(Room.status != 'archived').all()
-    room_list = [f"{r.building}-{r.room_number}" for r in rooms if r.building and r.room_number]
-    room_options = ','.join(room_list) if room_list else ''
+    
+    # 楼栋号列表（去重）
+    building_list = sorted(set(r.building for r in rooms if r.building))
+    
+    # 房间号列表
+    room_number_list = sorted(set(r.room_number for r in rooms if r.room_number))
     
     # 获取所有收费标准
     from app.models import FeeStandard
     fee_standards = FeeStandard.query.filter_by(is_active=True).all()
     fee_list = [fs.name for fs in fee_standards if fs.name]
-    fee_options = ','.join(fee_list) if fee_list else ''
     
-    # 添加房间号下拉菜单（F列，第2行到第1000行）
-    if room_options:
+    # 添加楼栋号下拉菜单（F列）
+    if building_list:
+        building_options = ','.join(building_list)
+        building_dv = DataValidation(
+            type="list",
+            formula1=f'"{building_options}"',
+            allow_blank=True
+        )
+        building_dv.error = '请从下拉列表中选择楼栋号'
+        building_dv.errorTitle = '无效的楼栋号'
+        building_dv.prompt = '请选择楼栋号'
+        building_dv.promptTitle = '楼栋号'
+        ws.add_data_validation(building_dv)
+        building_dv.add('F2:F1000')
+    
+    # 添加房间号下拉菜单（G列）
+    if room_number_list:
+        room_options = ','.join(room_number_list)
         room_dv = DataValidation(
             type="list",
             formula1=f'"{room_options}"',
@@ -426,10 +455,11 @@ def export_template():
         room_dv.prompt = '请选择房间号'
         room_dv.promptTitle = '房间号'
         ws.add_data_validation(room_dv)
-        room_dv.add('F2:F1000')
+        room_dv.add('G2:G1000')
     
-    # 添加收费标准下拉菜单（G列，第2行到第1000行）
-    if fee_options:
+    # 添加收费标准下拉菜单（H列）
+    if fee_list:
+        fee_options = ','.join(fee_list)
         fee_dv = DataValidation(
             type="list",
             formula1=f'"{fee_options}"',
@@ -440,7 +470,7 @@ def export_template():
         fee_dv.prompt = '请选择收费标准'
         fee_dv.promptTitle = '收费标准'
         ws.add_data_validation(fee_dv)
-        fee_dv.add('G2:G1000')
+        fee_dv.add('H2:H1000')
     
     # 添加性别下拉菜单（B列）
     gender_dv = DataValidation(
@@ -453,8 +483,11 @@ def export_template():
     
     # 添加示例数据
     sample_data = [
-        ['张三', '男', '中国', '', '计算机科学与技术', room_list[0] if room_list else '', fee_list[0] if fee_list else '', ''],
-        ['李四', '女', '美国', 'P1234567', '软件工程', '', '', ''],
+        ['张三', '男', '中国', '', '计算机科学与技术', 
+         building_list[0] if building_list else '', 
+         room_number_list[0] if room_number_list else '', 
+         fee_list[0] if fee_list else '', ''],
+        ['李四', '女', '美国', 'P1234567', '软件工程', '', '', '', ''],
     ]
     
     for row_idx, row_data in enumerate(sample_data, 2):
