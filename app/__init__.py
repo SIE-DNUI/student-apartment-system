@@ -56,7 +56,8 @@ def create_app(config_name=None):
                 return False
             return current_user.is_admin_role()
         
-        return dict(alerts_count=alerts_count, is_admin=is_admin)
+        from datetime import date
+        return dict(alerts_count=alerts_count, is_admin=is_admin, date=date)
     
     # 注册蓝图
     from app.routes import auth, dashboard, students, rooms, fees, reservations, users
