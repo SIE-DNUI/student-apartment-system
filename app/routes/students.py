@@ -215,14 +215,16 @@ def checkout(id):
         if room.current_occupancy < room.capacity:
             room.status = 'available'
     
-    # 清空学生的房间信息
+    # 清空学生的房间信息并归档
     student.room_id = None
     student.check_out_date = date.today()
-    student.status = 'checked_out'
+    student.status = 'archived'
+    student.deleted_at = datetime.utcnow()
+    student.retention_until = date.today() + timedelta(days=365*3)  # 保留3年
     
     db.session.commit()
     
-    flash(f'学生 {student.name} 已退房', 'success')
+    flash(f'学生 {student.name} 已退房并归档，将保留至 {student.retention_until}', 'success')
     return redirect(url_for('students.index'))
 
 
@@ -248,10 +250,12 @@ def batch_checkout():
                 if room.current_occupancy < room.capacity:
                     room.status = 'available'
             
-            # 清空学生的房间信息
+            # 清空学生的房间信息并归档
             student.room_id = None
             student.check_out_date = date.today()
-            student.status = 'checked_out'
+            student.status = 'archived'
+            student.deleted_at = datetime.utcnow()
+            student.retention_until = date.today() + timedelta(days=365*3)  # 保留3年
             count += 1
     
     db.session.commit()
