@@ -14,6 +14,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(64), unique=True, nullable=False, index=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    role = db.Column(db.String(20), default='read_write')  # admin, read_only, read_write
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -22,6 +23,18 @@ class User(UserMixin, db.Model):
     
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+    
+    def is_admin_role(self):
+        """检查是否为管理员角色"""
+        return self.role == 'admin' or self.is_admin
+    
+    def can_read(self):
+        """是否有读权限"""
+        return self.role in ['admin', 'read_only', 'read_write'] or self.is_admin
+    
+    def can_write(self):
+        """是否有写权限"""
+        return self.role in ['admin', 'read_write'] or self.is_admin
     
     def __repr__(self):
         return f'<User {self.username}>'
@@ -112,7 +125,10 @@ class Student(db.Model):
     payment_due_date = db.Column(db.Date)  # 缴费到期日期
     payment_status = db.Column(db.String(20), default='paid')  # paid, unpaid, overdue
     
-    status = db.Column(db.String(20), default='active')  # active, inactive, graduated
+    # 居留许可信息
+    residence_permit_expiry = db.Column(db.Date)  # 居留许可到期时间
+    
+    status = db.Column(db.String(20), default='active')  # active, inactive, graduated, checked_out
     notes = db.Column(db.Text)  # 备注
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -160,6 +176,25 @@ class Student(db.Model):
         if not self.payment_due_date:
             return None
         delta = self.payment_due_date - date.today()
+        return delta.days
+    
+    def is_residence_permit_expiring(self, days=30):
+        """居留许可是否即将到期（默认30天）"""
+        if not self.residence_permit_expiry:
+            return False
+        return 0 <= (self.residence_permit_expiry - date.today()).days <= days
+    
+    def is_residence_permit_expired(self):
+        """居留许可是否已过期"""
+        if not self.residence_permit_expiry:
+            return False
+        return date.today() > self.residence_permit_expiry
+    
+    def days_until_residence_permit_expiry(self):
+        """距离居留许可到期还有多少天"""
+        if not self.residence_permit_expiry:
+            return None
+        delta = self.residence_permit_expiry - date.today()
         return delta.days
     
     def __repr__(self):
@@ -222,7 +257,7 @@ class Alert(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'))
-    alert_type = db.Column(db.String(50), nullable=False)  # payment_due, payment_overdue, check_out
+    alert_type = db.Column(db.String(50), nullable=False)  # payment_due, payment_overdue, check_out, residence_permit_expiry
     title = db.Column(db.String(200), nullable=False)
     message = db.Column(db.Text)
     priority = db.Column(db.String(20), default='normal')  # low, normal, high, urgent

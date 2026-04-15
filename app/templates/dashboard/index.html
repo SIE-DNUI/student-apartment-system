@@ -3,6 +3,35 @@
 {% block title %}仪表盘{% endblock %}
 
 {% block content %}
+<!-- 居留许可到期提醒 -->
+{% if show_residence_alert and residence_permit_expiring %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <h4 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>居留许可即将到期提醒</h4>
+    <p>以下学生的居留许可将在30天内到期，请及时处理：</p>
+    <ul class="mb-0">
+        {% for student in residence_permit_expiring[:10] %}
+        <li>
+            <strong>{{ student.name }}</strong> - 
+            {% if student.nationalality %}{{ student.nationalality }}{% endif %}
+            到期日期: <span class="text-danger">{{ student.residence_permit_expiry }}</span>
+            {% if student.days_until_residence_permit_expiry() is not none %}
+            (还有 {{ student.days_until_residence_permit_expiry() }} 天)
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% if residence_permit_expiring|length > 10 %}
+    <p class="mb-0"><em>还有 {{ residence_permit_expiring|length - 10 }} 名学生...</em></p>
+    {% endif %}
+    <hr>
+    <p class="mb-0">
+        <a href="{{ url_for('students.index') }}?filter=residence_expiring" class="btn btn-danger btn-sm">查看全部</a>
+        <a href="{{ url_for('dashboard.dismiss_residence_alert') }}" class="btn btn-outline-secondary btn-sm">今天不再显示</a>
+    </p>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <!-- 统计卡片 -->
 <div class="row g-4 mb-4">
     <div class="col-md-3">
@@ -77,6 +106,48 @@
                 </div>
                 <div class="mt-3">
                     <small class="text-muted">总床位 {{ stats.total_capacity }}，已用 {{ stats.total_occupancy }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 居留许可统计卡片 -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="card stat-card border-warning">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                        <i class="bi bi-passport"></i>
+                    </div>
+                    <div class="ms-3">
+                        <h6 class="text-muted mb-1">居留许可即将到期</h6>
+                        <h3 class="mb-0 text-warning">{{ stats.residence_expiring }}</h3>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">30天内到期</small>
+                    <a href="{{ url_for('students.index') }}?filter=residence_expiring" class="btn btn-sm btn-outline-warning ms-2">查看</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card stat-card border-danger">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon bg-danger bg-opacity-10 text-danger">
+                        <i class="bi bi-exclamation-octagon"></i>
+                    </div>
+                    <div class="ms-3">
+                        <h6 class="text-muted mb-1">居留许可已过期</h6>
+                        <h3 class="mb-0 text-danger">{{ stats.residence_expired }}</h3>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">需要立即处理</small>
                 </div>
             </div>
         </div>

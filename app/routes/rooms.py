@@ -1,15 +1,16 @@
-from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app, send_file
+# -*- coding: utf-8 -*-
+"""
+房间管理路由模块
+提供房间信息管理功能
+"""
+from flask import render_template, Blueprint, redirect, url_for, flash, request, send_file
 from flask_login import login_required
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, IntegerField, TextAreaField
+from wtforms import StringField, SelectField, IntegerField
 from wtforms.validators import DataRequired, Optional, NumberRange
 from app.models import db
 from app.models import Room, FeeStandard, Student
-from datetime import datetime
-from werkzeug.utils import secure_filename
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import Font, Alignment, PatternFill
-import os
+from app.decorators import permission_required
 import io
 
 bp = Blueprint('rooms', __name__, url_prefix='/rooms')
@@ -65,6 +66,7 @@ def index():
 
 @bp.route('/add', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def add():
     """添加房间"""
     form = RoomForm()
@@ -100,6 +102,7 @@ def add():
 
 @bp.route('/edit/<int:room_id>', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def edit(room_id):
     """编辑房间"""
     room = Room.query.get_or_404(room_id)
@@ -142,6 +145,7 @@ def edit(room_id):
 
 @bp.route('/delete/<int:room_id>', methods=['POST'])
 @login_required
+@permission_required('write')
 def delete(room_id):
     """删除房间"""
     room = Room.query.get_or_404(room_id)
@@ -170,6 +174,7 @@ def detail(room_id):
 
 @bp.route('/batch-add', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def batch_add():
     """批量添加房间"""
     if request.method == 'POST':
@@ -187,6 +192,8 @@ def batch_add():
             return redirect(request.url)
         
         try:
+            from openpyxl import load_workbook
+            
             wb = load_workbook(file)
             ws = wb.active
             
@@ -254,6 +261,7 @@ def batch_add():
 
 @bp.route('/batch-edit', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def batch_edit():
     """批量修改房间"""
     if request.method == 'POST':
@@ -271,6 +279,8 @@ def batch_edit():
             return redirect(request.url)
         
         try:
+            from openpyxl import load_workbook
+            
             wb = load_workbook(file)
             ws = wb.active
             
@@ -352,6 +362,9 @@ def status():
 @login_required
 def export_template():
     """下载房间导入模板"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    
     wb = Workbook()
     ws = wb.active
     ws.title = '房间导入模板'

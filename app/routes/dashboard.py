@@ -1,9 +1,14 @@
-from flask import render_template, Blueprint, redirect, url_for, flash
+# -*- coding: utf-8 -*-
+"""
+仪表盘路由模块
+提供系统首页和数据统计功能
+"""
+from flask import render_template, Blueprint, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 from datetime import date, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from app.models import db
-from app.models import Room, Student, FeeRecord, Reservation, Alert, FeeStandard
+from app.models import Room, Student, FeeRecord, Reservation, Alert
 
 bp = Blueprint('dashboard', __name__)
 
@@ -31,12 +36,35 @@ def index():
         Student.payment_due_date >= date.today()
     ).all()
     
+    # 居留许可即将到期提醒（30天内）
+    residence_permit_expiring = Student.query.filter(
+        Student.residence_permit_expiry != None,
+        Student.residence_permit_expiry <= date.today() + timedelta(days=30),
+        Student.residence_permit_expiry >= date.today()
+    ).all()
+    
+    # 检查是否需要显示居留许可到期提醒（当天只显示一次）
+    show_residence_alert = True
+    if session.get('residence_alert_dismissed_date') == str(date.today()):
+        show_residence_alert = False
+    
     return render_template('dashboard/index.html', 
                          title='仪表盘',
                          stats=stats,
                          alerts=alerts,
                          upcoming_reservations=upcoming_reservations,
-                         upcoming_due=upcoming_due)
+                         upcoming_due=upcoming_due,
+                         residence_permit_expiring=residence_permit_expiring,
+                         show_residence_alert=show_residence_alert)
+
+
+@bp.route('/dismiss-residence-alert')
+@login_required
+def dismiss_residence_alert():
+    """关闭居留许可到期提醒（当天不再显示）"""
+    session['residence_alert_dismissed_date'] = str(date.today())
+    flash('提醒已关闭', 'info')
+    return redirect(url_for('dashboard.index'))
 
 
 def get_dashboard_stats():
@@ -51,7 +79,19 @@ def get_dashboard_stats():
     available_beds = total_capacity - total_occupancy
     
     # 学生统计
-    total_students = Student.query.filter_by(status='active').count()
+    total_students = Student.query.filter(Student.status == 'active').count()
+    
+    # 已入住学生
+    housed_students = Student.query.filter(
+        Student.status == 'active',
+        Student.room_id != None
+    ).count()
+    
+    # 未入住学生
+    unhoused_students = Student.query.filter(
+        Student.status == 'active',
+        Student.room_id == None
+    ).count()
     
     # 今日入住
     today_checkins = Student.query.filter_by(check_in_date=date.today()).count()
@@ -67,6 +107,19 @@ def get_dashboard_stats():
     overdue = Student.query.filter(
         Student.payment_due_date != None,
         Student.payment_due_date < date.today()
+    ).count()
+    
+    # 居留许可即将到期（30天内）
+    residence_expiring = Student.query.filter(
+        Student.residence_permit_expiry != None,
+        Student.residence_permit_expiry <= date.today() + timedelta(days=30),
+        Student.residence_permit_expiry >= date.today()
+    ).count()
+    
+    # 居留许可已过期
+    residence_expired = Student.query.filter(
+        Student.residence_permit_expiry != None,
+        Student.residence_permit_expiry < date.today()
     ).count()
     
     # 待确认的入住计划
@@ -94,9 +147,13 @@ def get_dashboard_stats():
         'total_occupancy': total_occupancy,
         'available_beds': available_beds,
         'total_students': total_students,
+        'housed_students': housed_students,
+        'unhoused_students': unhoused_students,
         'today_checkins': today_checkins,
         'due_soon': due_soon,
         'overdue': overdue,
+        'residence_expiring': residence_expiring,
+        'residence_expired': residence_expired,
         'pending_reservations': pending_reservations,
         'occupancy_rate': round(total_occupancy / total_capacity * 100, 1) if total_capacity > 0 else 0,
         'today_rooms_used': today_rooms,

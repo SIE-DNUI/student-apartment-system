@@ -10,9 +10,13 @@
                 <i class="bi bi-person-circle text-secondary" style="font-size: 5rem;"></i>
                 <h4 class="mt-3">{{ current_user.username }}</h4>
                 <p class="text-muted">{{ current_user.email }}</p>
-                <span class="badge bg-{{ 'primary' if current_user.is_admin else 'secondary' }}">
-                    {{ '管理员' if current_user.is_admin else '普通用户' }}
-                </span>
+                {% if current_user.role == 'admin' %}
+                <span class="badge bg-danger">管理员</span>
+                {% elif current_user.role == 'read_only' %}
+                <span class="badge bg-secondary">只读用户</span>
+                {% else %}
+                <span class="badge bg-primary">读写用户</span>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -37,9 +41,55 @@
                     </tr>
                     <tr>
                         <th>账户类型</th>
-                        <td>{{ '管理员' if current_user.is_admin else '普通用户' }}</td>
+                        <td>
+                            {% if current_user.role == 'admin' %}
+                            <span class="badge bg-danger">管理员</span>
+                            {% elif current_user.role == 'read_only' %}
+                            <span class="badge bg-secondary">只读用户</span>
+                            {% else %}
+                            <span class="badge bg-primary">读写用户</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>用户ID</th>
+                        <td>{{ current_user.id }}</td>
                     </tr>
                 </table>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>权限说明</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-danger">管理员</span></h6>
+                        <ul class="small">
+                            <li>查看所有数据</li>
+                            <li>添加、编辑、删除操作</li>
+                            <li>用户管理</li>
+                            <li>系统设置</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-primary">读写用户</span></h6>
+                        <ul class="small">
+                            <li>查看所有数据</li>
+                            <li>添加、编辑、删除操作</li>
+                            <li>不能管理用户</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-secondary">只读用户</span></h6>
+                        <ul class="small">
+                            <li>查看所有数据</li>
+                            <li>不能进行任何修改</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

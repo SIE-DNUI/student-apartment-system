@@ -1,10 +1,16 @@
-from flask import render_template, Blueprint, redirect, url_for, flash, request
-from flask_login import login_required
+# -*- coding: utf-8 -*-
+"""
+收费管理路由模块
+提供收费相关功能
+"""
+from flask import render_template, Blueprint, redirect, url_for, flash, request, jsonify
+from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
-from wtforms import StringField, FloatField, SelectField, DateField, TextAreaField
+from wtforms import StringField, FloatField, SelectField, DateField
 from wtforms.validators import DataRequired, Optional, NumberRange
 from app.models import db
 from app.models import FeeStandard, FeeRecord, Student, Alert
+from app.decorators import permission_required
 from datetime import datetime, date, timedelta
 
 bp = Blueprint('fees', __name__, url_prefix='/fees')
@@ -30,6 +36,7 @@ def standards():
 
 @bp.route('/standards/add', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def add_standard():
     """添加收费标准"""
     form = FeeStandardForm()
@@ -55,6 +62,7 @@ def add_standard():
 
 @bp.route('/standards/edit/<int:standard_id>', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def edit_standard(standard_id):
     """编辑收费标准"""
     standard = FeeStandard.query.get_or_404(standard_id)
@@ -82,6 +90,7 @@ def edit_standard(standard_id):
 
 @bp.route('/standards/delete/<int:standard_id>', methods=['POST'])
 @login_required
+@permission_required('write')
 def delete_standard(standard_id):
     """删除收费标准"""
     standard = FeeStandard.query.get_or_404(standard_id)
@@ -147,6 +156,7 @@ def records():
 
 @bp.route('/records/add', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def add_record():
     """添加缴费记录"""
     form = FeeRecordForm()
@@ -176,7 +186,6 @@ def add_record():
                 student.payment_due_date = due_date
         
         # 设置当前用户为经办人
-        from flask_login import current_user
         if not fee_record.operator:
             fee_record.operator = current_user.username
         
@@ -193,6 +202,7 @@ def add_record():
 
 @bp.route('/records/edit/<int:record_id>', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def edit_record(record_id):
     """编辑缴费记录"""
     record = FeeRecord.query.get_or_404(record_id)
@@ -214,6 +224,7 @@ def edit_record(record_id):
 
 @bp.route('/records/delete/<int:record_id>', methods=['POST'])
 @login_required
+@permission_required('write')
 def delete_record(record_id):
     """删除缴费记录"""
     record = FeeRecord.query.get_or_404(record_id)
@@ -326,6 +337,7 @@ def reminders():
 
 @bp.route('/generate-alerts')
 @login_required
+@permission_required('write')
 def generate_alerts():
     """生成到期提醒"""
     today = date.today()

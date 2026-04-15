@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+"""
+应用初始化模块
+"""
 import os
 from flask import Flask
 from flask_login import LoginManager
@@ -43,15 +47,22 @@ def create_app(config_name=None):
                 return 0
             return Alert.query.filter_by(is_read=False).count()
         
-        return dict(alerts_count=alerts_count)
+        def is_admin():
+            """检查当前用户是否为管理员"""
+            if not current_user.is_authenticated:
+                return False
+            return current_user.is_admin_role()
+        
+        return dict(alerts_count=alerts_count, is_admin=is_admin)
     
     # 注册蓝图
-    from app.routes import auth, dashboard, students, rooms, fees, reservations
+    from app.routes import auth, dashboard, students, rooms, fees, reservations, users
     app.register_blueprint(auth.bp)
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(students.bp)
     app.register_blueprint(rooms.bp)
     app.register_blueprint(fees.bp)
     app.register_blueprint(reservations.bp)
+    app.register_blueprint(users.bp)
     
     return app

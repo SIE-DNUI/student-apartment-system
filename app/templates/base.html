@@ -165,6 +165,21 @@
             border-radius: 4px;
         }
         
+        /* 学生行颜色 */
+        .student-row-housed {
+            background-color: rgba(39, 174, 96, 0.05);
+        }
+        
+        .student-row-unhoused {
+            background-color: rgba(243, 156, 18, 0.05);
+        }
+        
+        /* 居留许可即将到期标记 */
+        .text-danger-permit {
+            color: var(--danger-color);
+            font-weight: bold;
+        }
+        
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -216,7 +231,14 @@
                 <i class="bi bi-calendar-event me-2"></i> 入住计划
             </a>
             
+            {% if is_admin() %}
             <div class="nav-header">系统</div>
+            <a href="{{ url_for('users.index') }}" class="nav-link {% if request.endpoint and 'users' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-gear me-2"></i> 用户管理
+            </a>
+            {% endif %}
+            
+            <div class="nav-header">其他</div>
             <a href="{{ url_for('dashboard.alerts') }}" class="nav-link {% if request.endpoint == 'dashboard.alerts' %}active{% endif %}">
                 <i class="bi bi-bell me-2"></i> 提醒中心
                 {% set unread_alerts = alerts_count() %}
@@ -246,6 +268,13 @@
             <div class="d-flex align-items-center">
                 <span class="me-3 text-secondary">
                     <i class="bi bi-person-circle me-1"></i> {{ current_user.username }}
+                    {% if current_user.role == 'admin' %}
+                    <span class="badge bg-danger ms-1">管理员</span>
+                    {% elif current_user.role == 'read_only' %}
+                    <span class="badge bg-secondary ms-1">只读</span>
+                    {% else %}
+                    <span class="badge bg-info ms-1">读写</span>
+                    {% endif %}
                 </span>
                 <div class="position-relative">
                     <a href="{{ url_for('dashboard.alerts') }}" class="btn btn-link text-secondary">
@@ -312,8 +341,3 @@
     {% block extra_js %}{% endblock %}
 </body>
 </html>
-
-{% macro alerts_count() %}
-    {% from app.models import Alert %}
-    {{ Alert.query.filter_by(is_read=False).count() }}
-{% endmacro %}

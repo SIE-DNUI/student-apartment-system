@@ -1,4 +1,9 @@
-from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app, send_file
+# -*- coding: utf-8 -*-
+"""
+学生管理路由模块
+提供学生信息管理功能
+"""
+from flask import render_template, Blueprint, redirect, url_for, flash, request, send_file, session
 from flask_login import login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, DateField, TextAreaField
@@ -6,17 +11,15 @@ from wtforms.validators import DataRequired, Optional
 from wtforms.widgets import TextArea
 from app.models import db
 from app.models import Student, Room, FeeStandard, FeeRecord, Alert
+from app.decorators import permission_required
 from datetime import datetime, date, timedelta
-from werkzeug.utils import secure_filename
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-import os
 import io
 
 bp = Blueprint('students', __name__, url_prefix='/students')
 
 
 class StudentForm(FlaskForm):
+    """学生表单"""
     name = StringField('姓名', validators=[DataRequired(message='请输入姓名')])
     gender = SelectField('性别', choices=[('男', '男'), ('女', '女'), ('其他', '其他')], validators=[Optional()])
     nationality = StringField('国籍', validators=[Optional()])
@@ -27,6 +30,7 @@ class StudentForm(FlaskForm):
     check_out_date = DateField('预计离开日期', format='%Y-%m-%d', validators=[Optional()])
     fee_standard_id = SelectField('收费标准', coerce=int, validators=[Optional()])
     payment_due_date = DateField('缴费到期日期', format='%Y-%m-%d', validators=[Optional()])
+    residence_permit_expiry = DateField('居留许可到期时间', format='%Y-%m-%d', validators=[Optional()])
     notes = StringField('备注', widget=TextArea(), validators=[Optional()])
 
 
@@ -38,8 +42,10 @@ def index():
     per_page = 20
     
     search = request.args.get('search', '')
+    filter_status = request.args.get('filter', 'all')  # all, housed, unhoused
     
     query = Student.query
+    
     if search:
         query = query.filter(
             (Student.name.contains(search)) |
@@ -47,21 +53,37 @@ def index():
             (Student.phone.contains(search))
         )
     
+    # 按住宿状态筛选
+    if filter_status == 'housed':
+        query = query.filter(Student.room_id != None)
+    elif filter_status == 'unhoused':
+        query = query.filter(Student.room_id == None)
+    
     pagination = query.order_by(Student.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
     
     students = pagination.items
     
+    # 获取居留许可即将到期的学生数量
+    expiring_count = Student.query.filter(
+        Student.residence_permit_expiry != None,
+        Student.residence_permit_expiry <= date.today() + timedelta(days=30),
+        Student.residence_permit_expiry >= date.today()
+    ).count()
+    
     return render_template('students/index.html', 
                          title='学生管理',
                          students=students,
                          pagination=pagination,
-                         search=search)
+                         search=search,
+                         filter_status=filter_status,
+                         expiring_count=expiring_count)
 
 
 @bp.route('/add', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def add():
     """添加学生"""
     form = StudentForm()
@@ -101,6 +123,7 @@ def add():
 
 @bp.route('/edit/<int:id>', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def edit(id):
     """编辑学生"""
     student = Student.query.get_or_404(id)
@@ -148,11 +171,11 @@ def edit(id):
 
 @bp.route('/delete/<int:id>', methods=['POST'])
 @login_required
+@permission_required('write')
 def delete(id):
     """删除学生（归档）"""
     student = Student.query.get_or_404(id)
     student.status = 'archived'
-    student.actual_leave_date = date.today()
     
     if student.room_id:
         room = Room.query.get(student.room_id)
@@ -165,8 +188,85 @@ def delete(id):
     return redirect(url_for('students.index'))
 
 
+@bp.route('/<int:id>/checkout', methods=['POST'])
+@login_required
+@permission_required('write')
+def checkout(id):
+    """单个学生退房"""
+    student = Student.query.get_or_404(id)
+    
+    if not student.room_id:
+        flash('该学生未入住，无需退房', 'warning')
+        return redirect(url_for('students.index'))
+    
+    # 更新房间入住人数
+    room = Room.query.get(student.room_id)
+    if room:
+        room.current_occupancy -= 1
+        if room.current_occupancy < room.capacity:
+            room.status = 'available'
+    
+    # 清空学生的房间信息
+    student.room_id = None
+    student.check_out_date = date.today()
+    student.status = 'checked_out'
+    
+    db.session.commit()
+    
+    flash(f'学生 {student.name} 已退房', 'success')
+    return redirect(url_for('students.index'))
+
+
+@bp.route('/batch-checkout', methods=['POST'])
+@login_required
+@permission_required('write')
+def batch_checkout():
+    """批量退房"""
+    student_ids = request.form.getlist('student_ids')
+    
+    if not student_ids:
+        flash('请选择要退房的学生', 'warning')
+        return redirect(url_for('students.index'))
+    
+    count = 0
+    for student_id in student_ids:
+        student = Student.query.get(int(student_id))
+        if student and student.room_id:
+            # 更新房间入住人数
+            room = Room.query.get(student.room_id)
+            if room:
+                room.current_occupancy -= 1
+                if room.current_occupancy < room.capacity:
+                    room.status = 'available'
+            
+            # 清空学生的房间信息
+            student.room_id = None
+            student.check_out_date = date.today()
+            student.status = 'checked_out'
+            count += 1
+    
+    db.session.commit()
+    
+    flash(f'已成功退房 {count} 名学生', 'success')
+    return redirect(url_for('students.index'))
+
+
+@bp.route('/detail/<int:id>')
+@login_required
+def detail(id):
+    """学生详情"""
+    student = Student.query.get_or_404(id)
+    fee_records = FeeRecord.query.filter_by(student_id=id).order_by(FeeRecord.payment_date.desc()).all()
+    
+    return render_template('students/detail.html',
+                         title=f'{student.name} - 详情',
+                         student=student,
+                         fee_records=fee_records)
+
+
 @bp.route('/batch-import', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def batch_import():
     """批量导入学生"""
     if request.method == 'POST':
@@ -184,6 +284,8 @@ def batch_import():
             return redirect(request.url)
         
         try:
+            from openpyxl import load_workbook
+            
             wb = load_workbook(file)
             ws = wb.active
             
@@ -256,6 +358,9 @@ def student_fees(id):
 @login_required
 def export_template():
     """下载学生导入模板"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    
     wb = Workbook()
     ws = wb.active
     ws.title = '学生导入模板'

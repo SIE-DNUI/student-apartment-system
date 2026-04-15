@@ -1,16 +1,19 @@
-from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app, jsonify, send_file
+# -*- coding: utf-8 -*-
+"""
+入住计划管理路由模块
+提供入住计划相关功能
+"""
+from flask import render_template, Blueprint, redirect, url_for, flash, request, jsonify, send_file
 from flask_login import login_required
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, DateField, IntegerField, TextAreaField
+from wtforms import StringField, DateField, IntegerField
 from wtforms.validators import DataRequired, Optional, NumberRange
 from app.models import db
 from app.models import Reservation, Room, Student
+from app.decorators import permission_required
 from datetime import datetime, date, timedelta
-from werkzeug.utils import secure_filename
-from openpyxl import load_workbook
-from openpyxl.utils.datetime import from_excel
 from calendar import monthrange
-import os
+import io
 
 bp = Blueprint('reservations', __name__, url_prefix='/reservations')
 
@@ -43,7 +46,6 @@ def index():
     if month_filter:
         try:
             year, month = map(int, month_filter.split('-'))
-            from calendar import monthrange
             start = date(year, month, 1)
             end = date(year, month, monthrange(year, month)[1])
             query = query.filter(
@@ -69,6 +71,7 @@ def index():
 
 @bp.route('/add', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def add():
     """添加入住计划"""
     form = ReservationForm()
@@ -96,6 +99,7 @@ def add():
 
 @bp.route('/edit/<int:reservation_id>', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def edit(reservation_id):
     """编辑入住计划"""
     reservation = Reservation.query.get_or_404(reservation_id)
@@ -121,6 +125,7 @@ def edit(reservation_id):
 
 @bp.route('/delete/<int:reservation_id>', methods=['POST'])
 @login_required
+@permission_required('write')
 def delete(reservation_id):
     """删除入住计划"""
     reservation = Reservation.query.get_or_404(reservation_id)
@@ -321,6 +326,7 @@ def stats():
 
 @bp.route('/batch-import', methods=['GET', 'POST'])
 @login_required
+@permission_required('write')
 def batch_import():
     """批量导入入住计划 - 支持用户模板格式"""
     if request.method == 'POST':
@@ -338,6 +344,9 @@ def batch_import():
             return redirect(request.url)
         
         try:
+            from openpyxl import load_workbook
+            from openpyxl.utils.datetime import from_excel
+            
             wb = load_workbook(file)
             
             # 优先读取"总表"工作表，否则读取活动工作表
@@ -371,8 +380,6 @@ def batch_import():
                     check_out_date = row_data.get('离开时间', '')
                     
                     if isinstance(check_in_date, (int, float)):
-                        # Excel日期序列号转换为日期
-                        from openpyxl.utils.datetime import from_excel
                         check_in_date = from_excel(check_in_date)
                         if hasattr(check_in_date, 'date'):
                             check_in_date = check_in_date.date()
@@ -406,11 +413,10 @@ def batch_import():
                         person_count = 0
                     
                     if person_count <= 0:
-                        # 尝试从"需要房间数"字段推算
                         rooms_str = str(row_data.get('需要房间数', 0)).strip()
                         try:
                             rooms_needed = int(rooms_str)
-                            person_count = rooms_needed * 2  # 每间2人
+                            person_count = rooms_needed * 2
                         except:
                             person_count = 2
                     
@@ -468,8 +474,7 @@ def batch_import():
 def template_download():
     """下载导入模板"""
     from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from io import BytesIO
+    from openpyxl.styles import Font, Alignment, PatternFill
     
     wb = Workbook()
     ws = wb.active
@@ -508,7 +513,7 @@ def template_download():
     ws.column_dimensions['G'].width = 20
     
     # 保存
-    output = BytesIO()
+    output = io.BytesIO()
     wb.save(output)
     output.seek(0)
     
@@ -522,6 +527,7 @@ def template_download():
 
 @bp.route('/confirm/<int:reservation_id>', methods=['POST'])
 @login_required
+@permission_required('write')
 def confirm(reservation_id):
     """确认入住计划"""
     reservation = Reservation.query.get_or_404(reservation_id)
@@ -556,6 +562,7 @@ def confirm(reservation_id):
 
 @bp.route('/cancel/<int:reservation_id>', methods=['POST'])
 @login_required
+@permission_required('write')
 def cancel(reservation_id):
     """取消入住计划"""
     reservation = Reservation.query.get_or_404(reservation_id)

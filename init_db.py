@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 数据库初始化和命令行工具
 """
@@ -50,23 +51,18 @@ def init_db():
         print('数据库初始化完成！')
 
 
-def migrate_reservation():
-    """迁移Reservation表，添加新字段"""
+def migrate():
+    """数据库字段迁移"""
     app = create_app()
     with app.app_context():
-        # 检查新字段是否存在
         from sqlalchemy import inspect
         
         inspector = inspect(db.engine)
-        columns = [c['name'] for c in inspector.get_columns('reservations')]
         
-        new_columns = ['department', 'group_name', 'person_count', 'rooms_needed']
+        # 迁移 Reservation 表
+        reservation_columns = [c['name'] for c in inspector.get_columns('reservations')]
+        new_reservation_columns = ['department', 'group_name', 'person_count', 'rooms_needed']
         
-        for col in new_columns:
-            if col not in columns:
-                print(f'添加字段: {col}')
-        
-        # 执行列添加（SQLite兼容方式）
         with db.engine.connect() as conn:
             for col, col_type in [
                 ('department', 'VARCHAR(100)'),
@@ -74,13 +70,35 @@ def migrate_reservation():
                 ('person_count', 'INTEGER DEFAULT 0'),
                 ('rooms_needed', 'INTEGER DEFAULT 1')
             ]:
-                if col not in columns:
+                if col not in reservation_columns:
                     try:
                         conn.execute(db.text(f'ALTER TABLE reservations ADD COLUMN {col} {col_type}'))
                         conn.commit()
-                        print(f'✓ 成功添加字段: {col}')
+                        print(f'✓ 成功添加字段: reservations.{col}')
                     except Exception as e:
-                        print(f'× 添加字段失败: {col} - {e}')
+                        print(f'× 添加字段失败: reservations.{col} - {e}')
+        
+        # 迁移 User 表 - 添加 role 字段
+        user_columns = [c['name'] for c in inspector.get_columns('users')]
+        if 'role' not in user_columns:
+            with db.engine.connect() as conn:
+                try:
+                    conn.execute(db.text("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'read_write'"))
+                    conn.commit()
+                    print('✓ 成功添加字段: users.role')
+                except Exception as e:
+                    print(f'× 添加字段失败: users.role - {e}')
+        
+        # 迁移 Student 表 - 添加 residence_permit_expiry 字段
+        student_columns = [c['name'] for c in inspector.get_columns('students')]
+        if 'residence_permit_expiry' not in student_columns:
+            with db.engine.connect() as conn:
+                try:
+                    conn.execute(db.text('ALTER TABLE students ADD COLUMN residence_permit_expiry DATE'))
+                    conn.commit()
+                    print('✓ 成功添加字段: students.residence_permit_expiry')
+                except Exception as e:
+                    print(f'× 添加字段失败: students.residence_permit_expiry - {e}')
         
         print('字段迁移完成！')
 
@@ -99,7 +117,8 @@ def create_admin(username='admin', password='admin123', email='admin@example.com
         admin = User(
             username=username,
             email=email,
-            is_admin=True
+            is_admin=True,
+            role='admin'
         )
         admin.set_password(password)
         
@@ -197,6 +216,6 @@ if __name__ == '__main__':
     elif args.command == 'reset-db':
         reset_db()
     elif args.command == 'migrate':
-        migrate_reservation()
+        migrate()
     elif args.command == 'seed':
         seed_demo()

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}创建用户{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-person-plus me-2"></i>创建用户</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.username.label }} <span class="text-danger">*</span></label>
+                    {{ form.username(class="form-control", placeholder="请输入用户名") }}
+                    {% if form.username.errors %}<div class="text-danger small">{{ form.username.errors[0] }}</div>{% endif %}
+                    <small class="text-muted">3-64个字符，可包含字母、数字、下划线</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.email.label }} <span class="text-danger">*</span></label>
+                    {{ form.email(class="form-control", placeholder="example@example.com") }}
+                    {% if form.email.errors %}<div class="text-danger small">{{ form.email.errors[0] }}</div>{% endif %}
+                </div>
+                
+                <div class="col-md-12">
+                    <label class="form-label">{{ form.role.label }} <span class="text-danger">*</span></label>
+                    {{ form.role(class="form-select") }}
+                    {% if form.role.errors %}<div class="text-danger small">{{ form.role.errors[0] }}</div>{% endif %}
+                </div>
+                
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.password.label }} <span class="text-danger">*</span></label>
+                    {{ form.password(class="form-control", placeholder="请输入密码") }}
+                    {% if form.password.errors %}<div class="text-danger small">{{ form.password.errors[0] }}</div>{% endif %}
+                    <small class="text-muted">至少6个字符</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.password_confirm.label }} <span class="text-danger">*</span></label>
+                    {{ form.password_confirm(class="form-control", placeholder="请再次输入密码") }}
+                    {% if form.password_confirm.errors %}<div class="text-danger small">{{ form.password_confirm.errors[0] }}</div>{% endif %}
+                </div>
+            </div>
+            
+            <!-- 角色说明 -->
+            <div class="alert alert-info mt-4">
+                <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>角色权限说明</h6>
+                <hr class="my-2">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong><span class="badge bg-danger">管理员</span></strong>
+                        <p class="small mb-0">拥有所有权限，包括用户管理</p>
+                    </div>
+                    <div class="col-md-4">
+                        <strong><span class="badge bg-primary">读写用户</span></strong>
+                        <p class="small mb-0">可以查看和编辑数据，但不能管理用户</p>
+                    </div>
+                    <div class="col-md-4">
+                        <strong><span class="badge bg-secondary">只读用户</span></strong>
+                        <p class="small mb-0">只能查看数据，不能进行任何修改</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i> 创建用户
+                </button>
+                <a href="{{ url_for('users.index') }}" class="btn btn-outline-secondary ms-2">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

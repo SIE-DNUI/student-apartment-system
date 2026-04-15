@@ -19,7 +19,7 @@
         </div>
     </div>
     <div class="card-body">
-        <!-- 搜索框 -->
+        <!-- 搜索框和筛选 -->
         <form method="GET" class="row g-3 mb-3">
             <div class="col-md-4">
                 <div class="input-group">
@@ -29,119 +29,226 @@
                     </button>
                 </div>
             </div>
+            <div class="col-md-4">
+                <select name="filter" class="form-select" onchange="this.form.submit()">
+                    <option value="all" {% if filter_status == 'all' %}selected{% endif %}>全部学生</option>
+                    <option value="housed" {% if filter_status == 'housed' %}selected{% endif %}>已入住</option>
+                    <option value="unhoused" {% if filter_status == 'unhoused' %}selected{% endif %}>未入住</option>
+                </select>
+            </div>
+            {% if expiring_count > 0 %}
+            <div class="col-md-4">
+                <div class="alert alert-warning mb-0 py-2 px-3">
+                    <i class="bi bi-exclamation-triangle"></i> 居留许可即将到期: {{ expiring_count }} 人
+                </div>
+            </div>
+            {% endif %}
         </form>
         
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>学号</th>
-                        <th>姓名</th>
-                        <th>性别</th>
-                        <th>国籍</th>
-                        <th>房间</th>
-                        <th>入住日期</th>
-                        <th>到期日期</th>
-                        <th>状态</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for student in students %}
-                    <tr>
-                        <td>{{ student.student_id or '-' }}</td>
-                        <td>
-                            <a href="{{ url_for('students.detail', student_id=student.id) }}">
-                                {{ student.name }}
-                            </a>
-                        </td>
-                        <td>{{ student.gender or '-' }}</td>
-                        <td>{{ student.nationality or '-' }}</td>
-                        <td>
-                            {% if student.room %}
-                            <a href="{{ url_for('rooms.detail', room_id=student.room_id) }}">
-                                {{ student.room.building }}-{{ student.room.room_number }}
-                            </a>
-                            {% else %}
-                            <span class="text-muted">未分配</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ student.check_in_date or '-' }}</td>
-                        <td>
-                            {% if student.payment_due_date %}
-                                {% if student.is_payment_overdue() %}
-                                <span class="text-danger">{{ student.payment_due_date }} <small>(过期)</small></span>
+        <!-- 批量退房表单 -->
+        <form method="POST" action="{{ url_for('students.batch_checkout') }}" id="batch-checkout-form">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th width="40">
+                                <input type="checkbox" id="select-all" title="全选">
+                            </th>
+                            <th>学号</th>
+                            <th>姓名</th>
+                            <th>性别</th>
+                            <th>国籍</th>
+                            <th>房间</th>
+                            <th>入住日期</th>
+                            <th>到期日期</th>
+                            <th>居留许可</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                        <tr class="{% if student.room_id %}student-row-housed{% else %}student-row-unhoused{% endif %}">
+                            <td>
+                                <input type="checkbox" name="student_ids" value="{{ student.id }}" class="student-checkbox">
+                            </td>
+                            <td>{{ student.student_id or '-' }}</td>
+                            <td>
+                                <a href="{{ url_for('students.detail', student_id=student.id) }}">
+                                    {{ student.name }}
+                                </a>
+                            </td>
+                            <td>{{ student.gender or '-' }}</td>
+                            <td>{{ student.nationality or '-' }}</td>
+                            <td>
+                                {% if student.room %}
+                                <a href="{{ url_for('rooms.detail', room_id=student.room_id) }}">
+                                    {{ student.room.building }}-{{ student.room.room_number }}
+                                </a>
                                 {% else %}
-                                {{ student.payment_due_date }}
+                                <span class="text-muted">未分配</span>
                                 {% endif %}
-                            {% else %}
-                            -
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if student.status == 'active' %}
-                            <span class="badge bg-success">在住</span>
-                            {% elif student.status == 'inactive' %}
-                            <span class="badge bg-secondary">离校</span>
-                            {% else %}
-                            <span class="badge bg-info">{{ student.status }}</span>
-                            {% endif %}
-                            
-                            {% if student.is_payment_overdue() %}
-                            <span class="badge bg-danger">欠费</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{{ url_for('students.detail', student_id=student.id) }}" class="btn btn-sm btn-outline-info">
-                                <i class="bi bi-eye"></i>
-                            </a>
-                            <a href="{{ url_for('students.edit', student_id=student.id) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <form method="POST" action="{{ url_for('students.delete', student_id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要删除该学生吗？')">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="9" class="text-center py-4 text-muted">
-                            <i class="bi bi-people" style="font-size: 2rem;"></i>
-                            <p class="mt-2 mb-0">暂无学生数据</p>
-                            <a href="{{ url_for('students.batch_import') }}">批量导入</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                            </td>
+                            <td>{{ student.check_in_date or '-' }}</td>
+                            <td>
+                                {% if student.payment_due_date %}
+                                    {% if student.is_payment_overdue() %}
+                                    <span class="text-danger">{{ student.payment_due_date }} <small>(过期)</small></span>
+                                    {% else %}
+                                    {{ student.payment_due_date }}
+                                    {% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if student.residence_permit_expiry %}
+                                    {% if student.is_residence_permit_expired() %}
+                                    <span class="text-danger" title="已过期">
+                                        <i class="bi bi-exclamation-octagon"></i> {{ student.residence_permit_expiry }} <small>(过期)</small>
+                                    </span>
+                                    {% elif student.is_residence_permit_expiring() %}
+                                    <span class="text-danger-permit" title="即将到期">
+                                        <i class="bi bi-exclamation-triangle"></i> {{ student.residence_permit_expiry }}
+                                        <small>({{ student.days_until_residence_permit_expiry() }}天后)</small>
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">{{ student.residence_permit_expiry }}</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if student.status == 'active' %}
+                                    {% if student.room_id %}
+                                    <span class="badge bg-success">在住</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">待入住</span>
+                                    {% endif %}
+                                {% elif student.status == 'inactive' %}
+                                <span class="badge bg-secondary">离校</span>
+                                {% elif student.status == 'checked_out' %}
+                                <span class="badge bg-info">已退房</span>
+                                {% else %}
+                                <span class="badge bg-info">{{ student.status }}</span>
+                                {% endif %}
+                                
+                                {% if student.is_payment_overdue() %}
+                                <span class="badge bg-danger">欠费</span>
+                                {% endif %}
+                                
+                                {% if student.is_residence_permit_expired() %}
+                                <span class="badge bg-danger" title="居留许可已过期">许可过期</span>
+                                {% elif student.is_residence_permit_expiring() %}
+                                <span class="badge bg-warning" title="居留许可即将到期">许可到期</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('students.detail', student_id=student.id) }}" class="btn btn-sm btn-outline-info" title="详情">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('students.edit', student_id=student.id) }}" class="btn btn-sm btn-outline-primary" title="编辑">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if student.room_id %}
+                                <form method="POST" action="{{ url_for('students.checkout', student_id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要为 {{ student.name }} 办理退房吗？')">
+                                    <button type="submit" class="btn btn-sm btn-outline-warning" title="退房">
+                                        <i class="bi bi-box-arrow-right"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('students.delete', student_id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要删除该学生吗？')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="11" class="text-center py-4 text-muted">
+                                <i class="bi bi-people" style="font-size: 2rem;"></i>
+                                <p class="mt-2 mb-0">暂无学生数据</p>
+                                <a href="{{ url_for('students.batch_import') }}">批量导入</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if students %}
+            <div class="mt-3">
+                <button type="button" id="batch-checkout-btn" class="btn btn-warning" onclick="batchCheckout()">
+                    <i class="bi bi-box-arrow-right me-1"></i> 批量退房
+                </button>
+                <small class="text-muted ms-2">已选择 <span id="selected-count">0</span> 名学生</small>
+            </div>
+            {% endif %}
+        </form>
         
         <!-- 分页 -->
         {% if pagination.pages > 1 %}
         <nav class="mt-3">
             <ul class="pagination justify-content-center">
                 {% if pagination.has_prev %}
-                <li class="page-item"><a class="page-link" href="{{ url_for('students.index', page=pagination.prev_num, search=search) }}">上一页</a></li>
+                <li class="page-item"><a class="page-link" href="{{ url_for('students.index', page=pagination.prev_num, search=search, filter=filter_status) }}">上一页</a></li>
                 {% endif %}
                 
                 {% for p in range(1, pagination.pages + 1) %}
                     {% if p == pagination.page %}
                     <li class="page-item active"><span class="page-link">{{ p }}</span></li>
                     {% elif p <= 3 or p > pagination.pages - 3 or (p >= pagination.page - 1 and p <= pagination.page + 1) %}
-                    <li class="page-item"><a class="page-link" href="{{ url_for('students.index', page=p, search=search) }}">{{ p }}</a></li>
+                    <li class="page-item"><a class="page-link" href="{{ url_for('students.index', page=p, search=search, filter=filter_status) }}">{{ p }}</a></li>
                     {% elif p == 4 or p == pagination.pages - 3 %}
                     <li class="page-item disabled"><span class="page-link">...</span></li>
                     {% endif %}
                 {% endfor %}
                 
                 {% if pagination.has_next %}
-                <li class="page-item"><a class="page-link" href="{{ url_for('students.index', page=pagination.next_num, search=search) }}">下一页</a></li>
+                <li class="page-item"><a class="page-link" href="{{ url_for('students.index', page=pagination.next_num, search=search, filter=filter_status) }}">下一页</a></li>
                 {% endif %}
             </ul>
         </nav>
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 全选/取消全选
+    document.getElementById('select-all').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.student-checkbox');
+        checkboxes.forEach(function(cb) {
+            cb.checked = this.checked;
+        }.bind(this));
+        updateSelectedCount();
+    });
+    
+    // 更新已选数量
+    function updateSelectedCount() {
+        const checked = document.querySelectorAll('.student-checkbox:checked').length;
+        document.getElementById('selected-count').textContent = checked;
+    }
+    
+    // 监听单个复选框变化
+    document.querySelectorAll('.student-checkbox').forEach(function(cb) {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+    
+    // 批量退房
+    function batchCheckout() {
+        const selected = document.querySelectorAll('.student-checkbox:checked');
+        if (selected.length === 0) {
+            alert('请选择要退房的学生');
+            return;
+        }
+        
+        if (confirm('确定要为选中的 ' + selected.length + ' 名学生办理退房吗？')) {
+            document.getElementById('batch-checkout-form').submit();
+        }
+    }
+</script>
 {% endblock %}
