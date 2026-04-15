@@ -5,9 +5,11 @@
 import os
 from flask import Flask
 from flask_login import LoginManager
+from flask_wtf.csrf import CSRFProtect
 from config import config
 
 login_manager = LoginManager()
+csrf = CSRFProtect()
 
 
 def create_app(config_name=None):
@@ -27,6 +29,7 @@ def create_app(config_name=None):
     from app.models import db
     db.init_app(app)
     
+    csrf.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
     login_manager.login_message = '请先登录'
