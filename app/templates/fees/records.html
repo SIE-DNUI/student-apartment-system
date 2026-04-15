@@ -53,6 +53,7 @@
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <form method="POST" action="{{ url_for('fees.delete_record', record_id=record.id) }}" class="d-inline" onsubmit="return confirm('确定要删除该记录吗？')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-outline-danger">
                                     <i class="bi bi-trash"></i>
                                 </button>

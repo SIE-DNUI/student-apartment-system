@@ -12,6 +12,7 @@
             </div>
             <div class="card-body">
                 <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="quick">
                     
                     <div class="alert alert-warning">
@@ -66,6 +67,7 @@
             </div>
             <div class="card-body">
                 <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="update">
                     
                     <div class="mb-3">

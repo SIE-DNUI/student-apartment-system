@@ -50,6 +50,7 @@
                                 <i class="bi bi-pencil"></i> 编辑
                             </a>
                             <form method="POST" action="{{ url_for('users.delete', id=user.id) }}" class="d-inline" onsubmit="return confirm('确定要删除用户 {{ user.username }} 吗？此操作不可恢复！')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-outline-danger">
                                     <i class="bi bi-trash"></i> 删除
                                 </button>

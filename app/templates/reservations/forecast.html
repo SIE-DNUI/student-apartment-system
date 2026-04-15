@@ -9,6 +9,7 @@
     </div>
     <div class="card-body">
         <form method="POST" class="row g-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="col-md-4">
                 <label class="form-label">预测日期</label>
                 <input type="date" name="target_date" class="form-control" value="{{ target_date or '' }}" required>

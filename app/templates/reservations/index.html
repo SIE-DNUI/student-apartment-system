@@ -92,11 +92,13 @@
                         <td>
                             {% if r.status == 'pending' %}
                             <form method="POST" action="{{ url_for('reservations.confirm', reservation_id=r.id) }}" class="d-inline" onsubmit="return confirm('确认该入住计划？')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-success" title="确认入住">
                                     <i class="bi bi-check-lg"></i>
                                 </button>
                             </form>
                             <form method="POST" action="{{ url_for('reservations.cancel', reservation_id=r.id) }}" class="d-inline" onsubmit="return confirm('取消该入住计划？')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-outline-secondary" title="取消">
                                     <i class="bi bi-x-lg"></i>
                                 </button>
@@ -106,6 +108,7 @@
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <form method="POST" action="{{ url_for('reservations.delete', reservation_id=r.id) }}" class="d-inline" onsubmit="return confirm('确定要删除吗？')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
                                     <i class="bi bi-trash"></i>
                                 </button>
