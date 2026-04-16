@@ -7,9 +7,10 @@
     <div class="card-header">
         <h5 class="mb-0"><i class="bi bi-person-plus me-2"></i>添加学生</h5>
     </div>
+    
     <div class="card-body">
         <form method="POST">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {{ form.hidden_tag() }}
             
             <div class="row g-3">
@@ -18,10 +19,12 @@
                     {{ form.name(class="form-control") }}
                     {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors[0] }}</div>{% endif %}
                 </div>
+                
                 <div class="col-md-3">
                     <label class="form-label">{{ form.gender.label }}</label>
                     {{ form.gender(class="form-select") }}
                 </div>
+                
                 <div class="col-md-3">
                     <label class="form-label">{{ form.nationality.label }}</label>
                     {{ form.nationality(class="form-control") }}
@@ -31,6 +34,7 @@
                     <label class="form-label">{{ form.passport_number.label }}</label>
                     {{ form.passport_number(class="form-control") }}
                 </div>
+                
                 <div class="col-md-6">
                     <label class="form-label">{{ form.major.label }}</label>
                     {{ form.major(class="form-control") }}
@@ -41,29 +45,56 @@
                     <h6 class="text-muted mb-3"><i class="bi bi-house me-2"></i>住宿信息</h6>
                 </div>
                 
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">{{ form.room_id.label }}</label>
                     {{ form.room_id(class="form-select") }}
                 </div>
-                <div class="col-md-4">
+                
+                <div class="col-md-3">
+                    <label class="form-label">房间类型 <span class="text-danger">*</span></label>
+                    <select name="bed_occupancy" class="form-select">
+                        <option value="1">双人间（占用1个床位）</option>
+                        <option value="2">单人间（占用2个床位）</option>
+                    </select>
+                    <small class="text-muted">单人间将独享整个房间</small>
+                </div>
+                
+                <div class="col-md-3">
                     <label class="form-label">{{ form.check_in_date.label }}</label>
                     {{ form.check_in_date(class="form-control", type="date") }}
                 </div>
-                <div class="col-md-4">
+                
+                <div class="col-md-3">
                     <label class="form-label">{{ form.check_out_date.label }}</label>
                     {{ form.check_out_date(class="form-control", type="date") }}
                 </div>
                 
                 <div class="col-12">
                     <hr>
-                    <h6 class="text-muted mb-3"><i class="bi bi-currency-yuan me-2"></i>费用信息</h6>
+                    <h6 class="text-muted mb-3"><i class="bi bi-currency-yen me-2"></i>费用信息</h6>
                 </div>
                 
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">{{ form.fee_standard_id.label }}</label>
                     {{ form.fee_standard_id(class="form-select") }}
                 </div>
-                <div class="col-md-4">
+                
+                <div class="col-md-3">
+                    <label class="form-label">已缴房费总计</label>
+                    <input type="text" class="form-control" value="0.00" readonly style="background-color: #f5f5f5;">
+                    <small class="text-muted">累计缴纳金额（只读）</small>
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label">本次缴纳房费</label>
+                    <div class="input-group">
+                        <span class="input-group-text">¥</span>
+                        <input type="number" name="current_payment" class="form-control" step="0.01" min="0" value="0" placeholder="0.00">
+                    </div>
+                    <small class="text-muted">本次缴纳金额</small>
+                </div>
+                
+                <div class="col-md-3">
                     <label class="form-label">{{ form.payment_due_date.label }}</label>
                     {{ form.payment_due_date(class="form-control", type="date") }}
                 </div>

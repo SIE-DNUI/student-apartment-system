@@ -128,6 +128,10 @@ class Student(db.Model):
     # 居留许可信息
     residence_permit_expiry = db.Column(db.Date)  # 居留许可到期时间
     
+    # 床位和缴费信息
+    bed_occupancy = db.Column(db.Integer, default=1)  # 床位占用数：1=双人间, 2=单人间
+    total_paid = db.Column(db.Float, default=0)  # 已缴房费总计
+    
     status = db.Column(db.String(20), default='active')  # active, inactive, graduated, checked_out, archived
     deleted_at = db.Column(db.DateTime)  # 删除/归档时间
     retention_until = db.Column(db.Date)  # 保留截止日期（删除后3年）

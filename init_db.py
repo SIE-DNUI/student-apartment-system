@@ -119,6 +119,26 @@ def migrate():
                 except Exception as e:
                     print(f'× 添加字段失败: students.retention_until - {e}')
         
+        
+        # 迁移 Student 表 - 添加床位占用数和缴费字段
+        if 'bed_occupancy' not in student_columns:
+            with db.engine.connect() as conn:
+                try:
+                    conn.execute(db.text('ALTER TABLE students ADD COLUMN bed_occupancy INTEGER DEFAULT 1'))
+                    conn.commit()
+                    print('✓ 成功添加字段: students.bed_occupancy')
+                except Exception as e:
+                    print(f'× 添加字段失败: students.bed_occupancy - {e}')
+        
+        if 'total_paid' not in student_columns:
+            with db.engine.connect() as conn:
+                try:
+                    conn.execute(db.text('ALTER TABLE students ADD COLUMN total_paid FLOAT DEFAULT 0'))
+                    conn.commit()
+                    print('✓ 成功添加字段: students.total_paid')
+                except Exception as e:
+                    print(f'× 添加字段失败: students.total_paid - {e}')
+        
         print('字段迁移完成！')
 
 

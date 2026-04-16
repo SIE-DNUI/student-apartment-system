@@ -74,13 +74,20 @@ def index():
         Student.residence_permit_expiry >= date.today()
     ).count()
     
+    # 计算欠费学生数量
+    arrears_count = 0
+    for s in students:
+        if s.has_arrears():
+            arrears_count += 1
+    
     return render_template('students/index.html', 
                          title='学生管理',
                          students=students,
                          pagination=pagination,
                          search=search,
                          filter_status=filter_status,
-                         expiring_count=expiring_count)
+                         expiring_count=expiring_count,
+                         arrears_count=arrears_count)
 
 
 @bp.route('/add', methods=['GET', 'POST'])
@@ -106,10 +113,19 @@ def add():
         if student.fee_standard_id == 0:
             student.fee_standard_id = None
         
+        # 处理床位占用数
+        bed_occupancy = request.form.get('bed_occupancy', '1', type=int)
+        student.bed_occupancy = bed_occupancy
+        
+        # 处理本次缴纳房费
+        current_payment = request.form.get('current_payment', '0', type=float)
+        student.total_paid = current_payment if current_payment else 0
+        
         if student.room_id:
             room = Room.query.get(student.room_id)
             if room:
-                room.current_occupancy += 1
+                # 根据床位占用数更新房间入住人数
+                room.current_occupancy += bed_occupancy
                 if room.current_occupancy >= room.capacity:
                     room.status = 'full'
         
