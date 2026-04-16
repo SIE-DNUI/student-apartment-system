@@ -277,6 +277,8 @@ def api_daily_rooms():
 def stats():
     """房间统计面板"""
     total_rooms = Room.query.count()
+    # 当前可用 = 完全空的房间（无人入住）
+    available_rooms = Room.query.filter(Room.current_occupancy == 0).count()
     
     # 获取所有有效入住计划
     all_reservations = Reservation.query.filter(
@@ -320,6 +322,7 @@ def stats():
     
     return render_template('reservations/stats.html', title='房间统计',
                          total_rooms=total_rooms,
+                         available_rooms=available_rooms,
                          monthly_stats=monthly_stats,
                          peak_analysis=peak_analysis[:10])
 
