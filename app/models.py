@@ -203,6 +203,40 @@ class Student(db.Model):
         delta = self.residence_permit_expiry - date.today()
         return delta.days
     
+    def calculate_arrears(self):
+        """计算欠费金额"""
+        if not self.fee_standard_id or not self.check_in_date:
+            return 0
+        
+        fee_std = FeeStandard.query.get(self.fee_standard_id)
+        if not fee_std or fee_std.price <= 0:
+            return 0
+        
+        from datetime import date as date_module
+        today = date_module.today()
+        days = (today - self.check_in_date).days
+        
+        if days <= 0:
+            return 0
+        
+        if fee_std.unit == '月':
+            units = days / 30
+        elif fee_std.unit == '学期':
+            units = days / 120
+        elif fee_std.unit == '年':
+            units = days / 365
+        else:
+            units = days
+        
+        should_pay = units * fee_std.price * self.bed_occupancy
+        arrears = should_pay - (self.total_paid or 0)
+        
+        return max(0, round(arrears, 2))
+    
+    def has_arrears(self):
+        """是否有欠费"""
+        return self.calculate_arrears() > 0
+    
     def __repr__(self):
         return f'<Student {self.student_id}: {self.name}>'
 
