@@ -280,11 +280,45 @@ def batch_checkout():
     return redirect(url_for('students.index'))
 
 
-@bp.route('/detail/<int:id>')
+@bp.route('/detail/<int:id>', methods=['GET', 'POST'])
 @login_required
 def detail(id):
     """学生详情"""
     student = Student.query.get_or_404(id)
+    
+    # 处理缴费提交
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        if action == 'payment':
+            payment_amount = request.form.get('payment_amount', '0', type=float)
+            new_due_date = request.form.get('new_due_date')
+            payment_method = request.form.get('payment_method', '现金')
+            
+            # 更新已缴金额
+            if payment_amount and payment_amount > 0:
+                student.total_paid = (student.total_paid or 0) + payment_amount
+                
+                # 添加缴费记录
+                fee_record = FeeRecord()
+                fee_record.student_id = student.id
+                fee_record.amount = payment_amount
+                fee_record.payment_date = date.today()
+                fee_record.payment_method = payment_method
+                fee_record.notes = f'通过学生详情页缴纳'
+                db.session.add(fee_record)
+            
+            # 更新到期日期
+            if new_due_date:
+                try:
+                    student.payment_due_date = datetime.strptime(new_due_date, '%Y-%m-%d').date()
+                except:
+                    pass
+            
+            db.session.commit()
+            flash(f'缴费成功！已缴纳 ¥{payment_amount:.2f}', 'success')
+            return redirect(url_for('students.detail', id=id))
+    
     fee_records = FeeRecord.query.filter_by(student_id=id).order_by(FeeRecord.payment_date.desc()).all()
     
     return render_template('students/detail.html',
@@ -553,3 +587,17 @@ def archived():
                          students=students,
                          pagination=pagination,
                          search=search)
+
+@bp.route('/arrears')
+@login_required
+def arrears():
+    """欠费学生列表"""
+    all_students = Student.query.filter(Student.status == 'active').all()
+    arrears_students = [s for s in all_students if s.has_arrears()]
+    
+    # 按欠费金额排序
+    arrears_students.sort(key=lambda s: s.calculate_arrears(), reverse=True)
+    
+    return render_template('students/arrears.html',
+                         title='欠费学生',
+                         arrears_students=arrears_students)

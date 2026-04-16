@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}欠费学生{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-currency-yen me-2 text-danger"></i>欠费学生列表</h5>
+    </div>
+    
+    <div class="card-body">
+        {% if arrears_students %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>姓名</th>
+                        <th>性别</th>
+                        <th>房间</th>
+                        <th>入住日期</th>
+                        <th>收费标准</th>
+                        <th>已缴金额</th>
+                        <th>欠费金额</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in arrears_students %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('students.detail', id=student.id) }}">{{ student.name }}</a>
+                        </td>
+                        <td>{{ student.gender or '-' }}</td>
+                        <td>{{ student.room.building + '-' + student.room.room_number if student.room else '-' }}</td>
+                        <td>{{ student.check_in_date or '-' }}</td>
+                        <td>{{ student.fee_standard.name if student.fee_standard else '-' }}</td>
+                        <td>¥{{ "%.2f"|format(student.total_paid or 0) }}</td>
+                        <td class="text-danger fw-bold">¥{{ "%.2f"|format(student.calculate_arrears()) }}</td>
+                        <td>
+                            <a href="{{ url_for('students.detail', id=student.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-currency-yen"></i> 缴费
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-check-circle" style="font-size: 3rem;"></i>
+            <p class="mt-3 mb-0">暂无欠费学生</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

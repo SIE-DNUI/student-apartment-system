@@ -84,6 +84,11 @@
                                 <a href="{{ url_for('students.detail', id=student.id) }}">
                                     {{ student.name }}
                                 </a>
+                                {% if student.has_arrears() %}
+                                <span class="text-danger fw-bold ms-1" title="欠费 ¥{{ "%.2f"|format(student.calculate_arrears()) }}">
+                                    <i class="bi bi-currency-yen"></i>
+                                </span>
+                                {% endif %}
                             </td>
                             <td>{{ student.gender or '-' }}</td>
                             <td>{{ student.nationality or '-' }}</td>

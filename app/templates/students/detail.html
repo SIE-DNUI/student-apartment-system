@@ -23,6 +23,7 @@
             </a>
         </div>
     </div>
+    
     <div class="card-body">
         <!-- 警告信息 -->
         {% if student.is_residence_permit_expired() %}
@@ -37,6 +38,14 @@
         </div>
         {% endif %}
         
+        <!-- 欠费警告 -->
+        {% if student.has_arrears() %}
+        <div class="alert alert-danger">
+            <i class="bi bi-currency-yen me-2"></i>
+            <strong>欠费提醒：</strong>该学生当前欠费 <span class="fw-bold">¥{{ "%.2f"|format(student.calculate_arrears()) }}</span>，请及时催缴！
+        </div>
+        {% endif %}
+        
         <div class="row g-4">
             <div class="col-md-6">
                 <h6 class="text-muted mb-3"><i class="bi bi-person me-2"></i>基本信息</h6>
@@ -46,12 +55,10 @@
                     <tr><th>性别</th><td>{{ student.gender or '-' }}</td></tr>
                     <tr><th>国籍</th><td>{{ student.nationality or '-' }}</td></tr>
                     <tr><th>护照号</th><td>{{ student.passport_number or '-' }}</td></tr>
-                    <tr><th>手机号</th><td>{{ student.phone or '-' }}</td></tr>
-                    <tr><th>邮箱</th><td>{{ student.email or '-' }}</td></tr>
                     <tr><th>专业</th><td>{{ student.major or '-' }}</td></tr>
-                    <tr><th>年级</th><td>{{ student.grade or '-' }}</td></tr>
                 </table>
             </div>
+            
             <div class="col-md-6">
                 <h6 class="text-muted mb-3"><i class="bi bi-house me-2"></i>住宿信息</h6>
                 <table class="table table-sm">
@@ -64,85 +71,117 @@
                             {% else %}<span class="text-muted">未分配</span>{% endif %}
                         </td>
                     </tr>
+                    <tr><th>房间类型</th><td>{{ '单人间' if student.bed_occupancy == 2 else '双人间' }}</td></tr>
                     <tr><th>入住日期</th><td>{{ student.check_in_date or '-' }}</td></tr>
-                    <tr><th>预计离开</th><td>{{ student.check_out_date or '-' }}</td></tr>
                     <tr><th>收费标准</th><td>{{ student.fee_standard.name if student.fee_standard else '-' }}</td></tr>
-                    <tr><th>到期日期</th>
-                        <td>
-                            {% if student.payment_due_date %}
-                                {% if student.is_payment_overdue() %}
-                                <span class="text-danger">{{ student.payment_due_date }} (已过期)</span>
-                                {% else %}
-                                {{ student.payment_due_date }} ({{ student.days_until_due() }}天后)
-                                {% endif %}
-                            {% else %}-{% endif %}
-                        </td>
-                    </tr>
-                    <tr><th>状态</th>
-                        <td>
-                            {% if student.status == 'active' %}
-                                {% if student.room_id %}
-                                <span class="badge bg-success">在住</span>
-                                {% else %}
-                                <span class="badge bg-warning">待入住</span>
-                                {% endif %}
-                            {% elif student.status == 'inactive' %}
-                            <span class="badge bg-secondary">离校</span>
-                            {% elif student.status == 'checked_out' %}
-                            <span class="badge bg-info">已退房</span>
-                            {% else %}
-                            <span class="badge bg-info">{{ student.status }}</span>
-                            {% endif %}
-                            
-                            {% if student.is_payment_overdue() %}
-                            <span class="badge bg-danger">欠费</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    <tr><th>备注</th><td>{{ student.notes or '-' }}</td></tr>
-                </table>
-            </div>
-            
-            <!-- 居留许可信息 -->
-            <div class="col-12">
-                <hr>
-                <h6 class="text-muted mb-3"><i class="bi bi-passport me-2"></i>居留许可信息</h6>
-                <table class="table table-sm">
-                    <tr>
-                        <th width="20%">居留许可到期日期</th>
-                        <td>
-                            {% if student.residence_permit_expiry %}
-                                {% if student.is_residence_permit_expired() %}
-                                <span class="text-danger fw-bold">
-                                    <i class="bi bi-exclamation-octagon"></i> {{ student.residence_permit_expiry }} 
-                                    <small>(已过期)</small>
-                                </span>
-                                {% elif student.is_residence_permit_expiring() %}
-                                <span class="text-warning fw-bold">
-                                    <i class="bi bi-exclamation-triangle"></i> {{ student.residence_permit_expiry }} 
-                                    <small>(还有 {{ student.days_until_residence_permit_expiry() }} 天)</small>
-                                </span>
-                                {% else %}
-                                {{ student.residence_permit_expiry }}
-                                {% endif %}
-                            {% else %}
-                            <span class="text-muted">未填写</span>
-                            {% endif %}
-                        </td>
-                    </tr>
                 </table>
             </div>
         </div>
+        
+        <hr>
+        
+        <!-- 缴费信息 -->
+        <h6 class="text-muted mb-3"><i class="bi bi-currency-yen me-2"></i>缴费信息</h6>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h6 class="text-muted">已缴房费总计</h6>
+                        <h3 class="text-success">¥{{ "%.2f"|format(student.total_paid or 0) }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card {% if student.has_arrears() %}bg-danger text-white{% else %}bg-light{% endif %}">
+                    <div class="card-body text-center">
+                        <h6 class="{% if not student.has_arrears() %}text-muted{% endif %}">欠费金额</h6>
+                        <h3>¥{{ "%.2f"|format(student.calculate_arrears()) }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h6 class="text-muted">到期日期</h6>
+                        <h5>{{ student.payment_due_date or '未设置' }}</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 缴费操作 -->
+        <div class="mt-4">
+            <h6 class="text-muted mb-3"><i class="bi bi-plus-circle me-2"></i>缴费操作</h6>
+            <form method="POST" action="{{ url_for('students.detail', id=student.id) }}" class="row g-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="payment">
+                
+                <div class="col-md-3">
+                    <label class="form-label">本次缴纳金额</label>
+                    <div class="input-group">
+                        <span class="input-group-text">¥</span>
+                        <input type="number" name="payment_amount" class="form-control" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label">延长到期日期</label>
+                    <input type="date" name="new_due_date" class="form-control" value="{{ student.payment_due_date or '' }}">
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label">缴费方式</label>
+                    <select name="payment_method" class="form-select">
+                        <option value="现金">现金</option>
+                        <option value="微信">微信</option>
+                        <option value="支付宝">支付宝</option>
+                        <option value="银行转账">银行转账</option>
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-success d-block w-100">
+                        <i class="bi bi-check-lg me-1"></i> 确认缴费
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- 居留许可信息 -->
+        <hr>
+        <h6 class="text-muted mb-3"><i class="bi bi-passport me-2"></i>居留许可信息</h6>
+        <table class="table table-sm">
+            <tr>
+                <th width="20%">居留许可到期日期</th>
+                <td>
+                    {% if student.residence_permit_expiry %}
+                        {% if student.is_residence_permit_expired() %}
+                        <span class="text-danger fw-bold">
+                            <i class="bi bi-exclamation-octagon"></i> {{ student.residence_permit_expiry }} 
+                            <small>(已过期)</small>
+                        </span>
+                        {% elif student.is_residence_permit_expiring() %}
+                        <span class="text-warning fw-bold">
+                            <i class="bi bi-exclamation-triangle"></i> {{ student.residence_permit_expiry }} 
+                            <small>(还有 {{ student.days_until_residence_permit_expiry() }} 天)</small>
+                        </span>
+                        {% else %}
+                        {{ student.residence_permit_expiry }}
+                        {% endif %}
+                    {% else %}
+                    <span class="text-muted">未填写</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
     </div>
 </div>
 
 <!-- 缴费记录 -->
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header">
         <h5 class="mb-0">缴费记录</h5>
-        <a href="{{ url_for('fees.add_record') }}" class="btn btn-sm btn-success">
-            <i class="bi bi-plus-lg me-1"></i> 添加缴费
-        </a>
     </div>
     <div class="card-body p-0">
         {% if fee_records %}
@@ -153,9 +192,7 @@
                         <th>缴费日期</th>
                         <th>金额</th>
                         <th>缴费方式</th>
-                        <th>期间</th>
-                        <th>收据号</th>
-                        <th>经办人</th>
+                        <th>备注</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -164,9 +201,7 @@
                         <td>{{ record.payment_date }}</td>
                         <td class="text-success fw-bold">¥{{ record.amount }}</td>
                         <td>{{ record.payment_method or '-' }}</td>
-                        <td>{{ record.payment_period_start or '-' }} ~ {{ record.payment_period_end or '-' }}</td>
-                        <td>{{ record.receipt_number or '-' }}</td>
-                        <td>{{ record.operator or '-' }}</td>
+                        <td>{{ record.notes or '-' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

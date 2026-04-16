@@ -48,6 +48,10 @@ def index():
     if session.get('residence_alert_dismissed_date') == str(date.today()):
         show_residence_alert = False
     
+    # 欠费学生列表
+    all_students = Student.query.filter(Student.status == 'active').all()
+    arrears_students = [s for s in all_students if s.has_arrears()]
+    
     return render_template('dashboard/index.html', 
                          title='仪表盘',
                          stats=stats,
@@ -55,7 +59,8 @@ def index():
                          upcoming_reservations=upcoming_reservations,
                          upcoming_due=upcoming_due,
                          residence_permit_expiring=residence_permit_expiring,
-                         show_residence_alert=show_residence_alert)
+                         show_residence_alert=show_residence_alert,
+                         arrears_students=arrears_students)
 
 
 @bp.route('/dismiss-residence-alert')
@@ -139,7 +144,15 @@ def get_dashboard_stats():
         Reservation.status != 'cancelled'
     ).scalar() or 0
     
+    # 欠费学生统计
+    all_students = Student.query.filter(Student.status == 'active').all()
+    arrears_students = [s for s in all_students if s.has_arrears()]
+    arrears_count = len(arrears_students)
+    total_arrears = sum(s.calculate_arrears() for s in arrears_students)
+    
     return {
+        'arrears_count': arrears_count,
+        'total_arrears': total_arrears,
         'total_rooms': total_rooms,
         'available_rooms': available_rooms,
         'occupied_rooms': occupied_rooms,
