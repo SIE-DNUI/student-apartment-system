@@ -32,19 +32,21 @@
 </div>
 {% endif %}
 
-<!-- 问题5优化：欠费提醒 - 只保留一处 -->
+<!-- 问题5优化：欠费提醒 - 只保留一处，学生名字可点击进入详情页操作缴费 -->
 {% if show_arrears_alert and arrears_students and arrears_students|length > 0 %}
 <div class="alert alert-warning alert-dismissible fade show" role="alert">
     <h4 class="alert-heading"><i class="bi bi-currency-yen me-2"></i>欠费提醒 ({{ arrears_students|length }} 人)</h4>
-    <p>以下学生存在欠费情况，请及时处理：</p>
+    <p>以下学生存在欠费情况，点击姓名可查看详情并进行缴费操作：</p>
     <ul class="mb-0">
         {% for student in arrears_students[:5] %}
         <li>
-            <strong>{{ student.name }}</strong> - 
-            欠费金额: <span class="text-danger fw-bold">¥{{ "%.2f"|format(student.calculate_arrears()) }}</span>
+            <a href="{{ url_for('students.detail', id=student.id) }}" class="fw-bold text-decoration-none">
+                {{ student.name }}
+            </a>
             {% if student.room %}
-            ({{ student.room.building }}-{{ student.room.room_number }})
+            <small class="text-muted">({{ student.room.building }}-{{ student.room.room_number }})</small>
             {% endif %}
+            - 欠费: <span class="text-danger fw-bold">¥{{ "%.2f"|format(student.calculate_arrears()) }}</span>
         </li>
         {% endfor %}
     </ul>
@@ -53,8 +55,8 @@
     {% endif %}
     <hr>
     <p class="mb-0">
-        <a href="{{ url_for('dashboard.alerts_by_type', alert_type='payment_overdue') }}" class="btn btn-warning btn-sm">
-            <i class="bi bi-list-ul me-1"></i>查看全部
+        <a href="{{ url_for('students.index') }}?filter=arrears" class="btn btn-warning btn-sm">
+            <i class="bi bi-list-ul me-1"></i>查看全部欠费学生
         </a>
         <a href="{{ url_for('dashboard.dismiss_arrears_alert') }}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-eye-slash me-1"></i>今天不再显示
