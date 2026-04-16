@@ -3,7 +3,7 @@
 {% block title %}仪表盘{% endblock %}
 
 {% block content %}
-<!-- 居留许可到期提醒 -->
+<!-- 顶部提醒区域 -->
 {% if show_residence_alert and residence_permit_expiring %}
 <div class="alert alert-danger alert-dismissible fade show" role="alert">
     <h4 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>居留许可即将到期提醒</h4>
@@ -32,54 +32,40 @@
 </div>
 {% endif %}
 
+<!-- 问题5优化：欠费提醒 - 只保留一处 -->
+{% if show_arrears_alert and arrears_students and arrears_students|length > 0 %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <h4 class="alert-heading"><i class="bi bi-currency-yen me-2"></i>欠费提醒 ({{ arrears_students|length }} 人)</h4>
+    <p>以下学生存在欠费情况，请及时处理：</p>
+    <ul class="mb-0">
+        {% for student in arrears_students[:5] %}
+        <li>
+            <strong>{{ student.name }}</strong> - 
+            欠费金额: <span class="text-danger fw-bold">¥{{ "%.2f"|format(student.calculate_arrears()) }}</span>
+            {% if student.room %}
+            ({{ student.room.building }}-{{ student.room.room_number }})
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% if arrears_students|length > 5 %}
+    <p class="mb-0"><em>还有 {{ arrears_students|length - 5 }} 名学生...</em></p>
+    {% endif %}
+    <hr>
+    <p class="mb-0">
+        <a href="{{ url_for('dashboard.alerts_by_type', alert_type='payment_overdue') }}" class="btn btn-warning btn-sm">
+            <i class="bi bi-list-ul me-1"></i>查看全部
+        </a>
+        <a href="{{ url_for('dashboard.dismiss_arrears_alert') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-eye-slash me-1"></i>今天不再显示
+        </a>
+    </p>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <!-- 统计卡片 -->
 <div class="row g-4 mb-4">
-            <!-- 欠费提醒 -->
-            {% if arrears_students and arrears_students|length > 0 %}
-            <div class="col-12">
-                <div class="card border-danger">
-                    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0"><i class="bi bi-currency-yen me-2"></i>欠费提醒</h6>
-                        <span class="badge bg-light text-danger">{{ arrears_students|length }} 人欠费</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>姓名</th>
-                                        <th>房间</th>
-                                        <th>入住日期</th>
-                                        <th>收费标准</th>
-                                        <th>已缴金额</th>
-                                        <th>欠费金额</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for student in arrears_students %}
-                                    <tr>
-                                        <td><a href="{{ url_for('students.detail', id=student.id) }}">{{ student.name }}</a></td>
-                                        <td>{{ student.room.building + '-' + student.room.room_number if student.room else '-' }}</td>
-                                        <td>{{ student.check_in_date or '-' }}</td>
-                                        <td>{{ student.fee_standard.name if student.fee_standard else '-' }}</td>
-                                        <td>¥{{ "%.2f"|format(student.total_paid or 0) }}</td>
-                                        <td class="text-danger fw-bold">¥{{ "%.2f"|format(student.calculate_arrears()) }}</td>
-                                        <td>
-                                            <a href="{{ url_for('students.detail', id=student.id) }}" class="btn btn-sm btn-outline-primary">
-                                                <i class="bi bi-currency-yen"></i> 缴费
-                                            </a>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
     <div class="col-md-3">
         <div class="card stat-card">
             <div class="card-body">
@@ -160,52 +146,6 @@
 
 <!-- 居留许可统计卡片 -->
 <div class="row g-4 mb-4">
-            <!-- 欠费提醒 -->
-            {% if arrears_students and arrears_students|length > 0 %}
-            <div class="col-12">
-                <div class="card border-danger">
-                    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0"><i class="bi bi-currency-yen me-2"></i>欠费提醒</h6>
-                        <span class="badge bg-light text-danger">{{ arrears_students|length }} 人欠费</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>姓名</th>
-                                        <th>房间</th>
-                                        <th>入住日期</th>
-                                        <th>收费标准</th>
-                                        <th>已缴金额</th>
-                                        <th>欠费金额</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for student in arrears_students %}
-                                    <tr>
-                                        <td><a href="{{ url_for('students.detail', id=student.id) }}">{{ student.name }}</a></td>
-                                        <td>{{ student.room.building + '-' + student.room.room_number if student.room else '-' }}</td>
-                                        <td>{{ student.check_in_date or '-' }}</td>
-                                        <td>{{ student.fee_standard.name if student.fee_standard else '-' }}</td>
-                                        <td>¥{{ "%.2f"|format(student.total_paid or 0) }}</td>
-                                        <td class="text-danger fw-bold">¥{{ "%.2f"|format(student.calculate_arrears()) }}</td>
-                                        <td>
-                                            <a href="{{ url_for('students.detail', id=student.id) }}" class="btn btn-sm btn-outline-primary">
-                                                <i class="bi bi-currency-yen"></i> 缴费
-                                            </a>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
     <div class="col-md-6">
         <div class="card stat-card border-warning">
             <div class="card-body">
@@ -248,52 +188,6 @@
 
 <!-- 房间概览和提醒 -->
 <div class="row g-4 mb-4">
-            <!-- 欠费提醒 -->
-            {% if arrears_students and arrears_students|length > 0 %}
-            <div class="col-12">
-                <div class="card border-danger">
-                    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0"><i class="bi bi-currency-yen me-2"></i>欠费提醒</h6>
-                        <span class="badge bg-light text-danger">{{ arrears_students|length }} 人欠费</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>姓名</th>
-                                        <th>房间</th>
-                                        <th>入住日期</th>
-                                        <th>收费标准</th>
-                                        <th>已缴金额</th>
-                                        <th>欠费金额</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for student in arrears_students %}
-                                    <tr>
-                                        <td><a href="{{ url_for('students.detail', id=student.id) }}">{{ student.name }}</a></td>
-                                        <td>{{ student.room.building + '-' + student.room.room_number if student.room else '-' }}</td>
-                                        <td>{{ student.check_in_date or '-' }}</td>
-                                        <td>{{ student.fee_standard.name if student.fee_standard else '-' }}</td>
-                                        <td>¥{{ "%.2f"|format(student.total_paid or 0) }}</td>
-                                        <td class="text-danger fw-bold">¥{{ "%.2f"|format(student.calculate_arrears()) }}</td>
-                                        <td>
-                                            <a href="{{ url_for('students.detail', id=student.id) }}" class="btn btn-sm btn-outline-primary">
-                                                <i class="bi bi-currency-yen"></i> 缴费
-                                            </a>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
     <div class="col-md-6">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">

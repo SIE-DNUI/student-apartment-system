@@ -3,7 +3,7 @@
 仪表盘路由模块
 提供系统首页和数据统计功能
 """
-from flask import render_template, Blueprint, redirect, url_for, flash, session
+from flask import render_template, Blueprint, redirect, url_for, flash, session, request
 from flask_login import login_required, current_user
 from datetime import date, timedelta
 from sqlalchemy import func, or_
@@ -52,6 +52,11 @@ def index():
     all_students = Student.query.filter(Student.status == 'active').all()
     arrears_students = [s for s in all_students if s.has_arrears()]
     
+    # 检查是否需要显示欠费提醒（当天只显示一次）- 问题5优化
+    show_arrears_alert = True
+    if session.get('arrears_alert_dismissed_date') == str(date.today()):
+        show_arrears_alert = False
+    
     return render_template('dashboard/index.html', 
                          title='仪表盘',
                          stats=stats,
@@ -60,6 +65,7 @@ def index():
                          upcoming_due=upcoming_due,
                          residence_permit_expiring=residence_permit_expiring,
                          show_residence_alert=show_residence_alert,
+                         show_arrears_alert=show_arrears_alert,
                          arrears_students=arrears_students)
 
 
@@ -69,6 +75,15 @@ def dismiss_residence_alert():
     """关闭居留许可到期提醒（当天不再显示）"""
     session['residence_alert_dismissed_date'] = str(date.today())
     flash('提醒已关闭', 'info')
+    return redirect(url_for('dashboard.index'))
+
+
+@bp.route('/dismiss-arrears-alert')
+@login_required
+def dismiss_arrears_alert():
+    """关闭欠费提醒（当天不再显示）- 问题5优化"""
+    session['arrears_alert_dismissed_date'] = str(date.today())
+    flash('欠费提醒已关闭，今天不再显示', 'info')
     return redirect(url_for('dashboard.index'))
 
 
@@ -179,7 +194,129 @@ def get_dashboard_stats():
 def alerts():
     """提醒列表"""
     alert_list = Alert.query.order_by(Alert.created_at.desc()).all()
-    return render_template('dashboard/alerts.html', title='提醒中心', alerts=alert_list)
+    # 获取各类提醒统计
+    stats = get_alert_stats()
+    return render_template('dashboard/alerts.html', title='提醒中心', alerts=alert_list, 
+                          filter_type=None, stats=stats)
+
+
+@bp.route('/alerts/type/<alert_type>')
+@login_required
+def alerts_by_type(alert_type):
+    """按类型筛选提醒 - 问题4"""
+    # 获取各类提醒统计
+    stats = get_alert_stats()
+    
+    # 根据类型筛选提醒
+    if alert_type == 'payment_due':
+        # 费用即将到期（7天内）
+        alert_list = Alert.query.filter_by(alert_type='payment_due').order_by(Alert.created_at.desc()).all()
+        # 同时获取即将到期的学生
+        upcoming_students = Student.query.filter(
+            Student.payment_due_date != None,
+            Student.payment_due_date <= date.today() + timedelta(days=7),
+            Student.payment_due_date >= date.today()
+        ).all()
+        if upcoming_students:
+            # 为学生创建提醒
+            for student in upcoming_students:
+                existing = Alert.query.filter_by(
+                    student_id=student.id,
+                    alert_type='payment_due',
+                    is_read=False
+                ).first()
+                if not existing:
+                    alert = Alert()
+                    alert.student_id = student.id
+                    alert.alert_type = 'payment_due'
+                    alert.title = f'{student.name} 费用即将到期'
+                    alert.message = f'预计到期日期: {student.payment_due_date} (还有{(student.payment_due_date - date.today()).days}天)'
+                    alert.priority = 'high'
+                    alert.due_date = student.payment_due_date
+                    db.session.add(alert)
+            db.session.commit()
+            alert_list = Alert.query.filter_by(alert_type='payment_due').order_by(Alert.created_at.desc()).all()
+    elif alert_type == 'payment_overdue':
+        # 欠费提醒
+        alert_list = Alert.query.filter_by(alert_type='payment_overdue').order_by(Alert.created_at.desc()).all()
+        # 同时获取欠费学生并创建提醒
+        all_students = Student.query.filter(Student.status == 'active').all()
+        arrears_students = [s for s in all_students if s.has_arrears()]
+        for student in arrears_students:
+            existing = Alert.query.filter_by(
+                student_id=student.id,
+                alert_type='payment_overdue',
+                is_read=False
+            ).first()
+            if not existing:
+                alert = Alert()
+                alert.student_id = student.id
+                alert.alert_type = 'payment_overdue'
+                alert.title = f'{student.name} 欠费'
+                alert.message = f'欠费金额: ¥{student.calculate_arrears():.2f}'
+                alert.priority = 'urgent'
+                alert.due_date = student.payment_due_date
+                db.session.add(alert)
+        db.session.commit()
+        alert_list = Alert.query.filter_by(alert_type='payment_overdue').order_by(Alert.created_at.desc()).all()
+    elif alert_type == 'residence_permit_expiry':
+        # 居留许可到期
+        alert_list = Alert.query.filter_by(alert_type='residence_permit_expiry').order_by(Alert.created_at.desc()).all()
+        # 同时获取即将到期的学生并创建提醒
+        expiring_students = Student.query.filter(
+            Student.residence_permit_expiry != None,
+            Student.residence_permit_expiry <= date.today() + timedelta(days=30),
+            Student.residence_permit_expiry >= date.today()
+        ).all()
+        for student in expiring_students:
+            existing = Alert.query.filter_by(
+                student_id=student.id,
+                alert_type='residence_permit_expiry',
+                is_read=False
+            ).first()
+            if not existing:
+                alert = Alert()
+                alert.student_id = student.id
+                alert.alert_type = 'residence_permit_expiry'
+                alert.title = f'{student.name} 居留许可即将到期'
+                alert.message = f'到期日期: {student.residence_permit_expiry} (还有{student.days_until_residence_permit_expiry()}天)'
+                alert.priority = 'high'
+                alert.due_date = student.residence_permit_expiry
+                db.session.add(alert)
+        db.session.commit()
+        alert_list = Alert.query.filter_by(alert_type='residence_permit_expiry').order_by(Alert.created_at.desc()).all()
+    else:
+        alert_list = Alert.query.order_by(Alert.created_at.desc()).all()
+    
+    return render_template('dashboard/alerts.html', title='提醒中心', alerts=alert_list, 
+                          filter_type=alert_type, stats=stats)
+
+
+def get_alert_stats():
+    """获取各类提醒统计 - 问题4"""
+    # 费用即将到期
+    due_soon_count = Student.query.filter(
+        Student.payment_due_date != None,
+        Student.payment_due_date <= date.today() + timedelta(days=7),
+        Student.payment_due_date >= date.today()
+    ).count()
+    
+    # 欠费学生
+    all_students = Student.query.filter(Student.status == 'active').all()
+    arrears_count = len([s for s in all_students if s.has_arrears()])
+    
+    # 居留许可到期
+    residence_count = Student.query.filter(
+        Student.residence_permit_expiry != None,
+        Student.residence_permit_expiry <= date.today() + timedelta(days=30),
+        Student.residence_permit_expiry >= date.today()
+    ).count()
+    
+    return {
+        'due_soon_count': due_soon_count,
+        'arrears_count': arrears_count,
+        'residence_count': residence_count
+    }
 
 
 @bp.route('/alerts/<int:alert_id>/read')

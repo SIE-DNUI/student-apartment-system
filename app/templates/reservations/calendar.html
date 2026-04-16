@@ -7,7 +7,11 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <div>
             <h5 class="mb-0"><i class="bi bi-calendar3 me-2"></i>房间日历 - {{ year }}年{{ month }}月</h5>
-            <small class="text-muted">总房间数: {{ stats.total_rooms }} | 本月计划: {{ stats.month_reservations }}个 | 入住人数: {{ stats.total_persons }}</small>
+            <small class="text-muted">
+                总房间: {{ stats.total_rooms }} | 
+                计划入住: {{ stats.month_reservations }}个({{ stats.total_persons }}人) | 
+                实际入住: {{ stats.housed_students }}人({{ stats.actual_occupied_rooms }}间)
+            </small>
         </div>
         <div>
             <!-- 月份导航 -->
@@ -82,12 +86,22 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if day.reservations %}
-                                <button type="button" class="btn btn-sm btn-link p-0" data-bs-toggle="modal" data-bs-target="#dayModal{{ day.day }}">
-                                    <i class="bi bi-people me-1"></i> {{ day.reservations|length }}个计划
-                                </button>
+                            {% if day.reservations or day.students %}
+                                <div class="d-flex flex-wrap gap-1 mb-1">
+                                    {% if day.reservations %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#dayModal{{ day.day }}">
+                                        <i class="bi bi-calendar-plus me-1"></i>{{ day.reservations|length }}个计划
+                                    </button>
+                                    {% endif %}
+                                    {% if day.students %}
+                                    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#studentsModal{{ day.day }}">
+                                        <i class="bi bi-people me-1"></i>{{ day.students|length }}名入住
+                                    </button>
+                                    {% endif %}
+                                </div>
                                 
-                                <!-- Modal for day details -->
+                                <!-- Modal for day reservations -->
+                                {% if day.reservations %}
                                 <div class="modal fade" id="dayModal{{ day.day }}" tabindex="-1">
                                     <div class="modal-dialog modal-lg">
                                         <div class="modal-content">
@@ -134,6 +148,59 @@
                                         </div>
                                     </div>
                                 </div>
+                                {% endif %}
+                                
+                                <!-- Modal for day students -->
+                                {% if day.students %}
+                                <div class="modal fade" id="studentsModal{{ day.day }}" tabindex="-1">
+                                    <div class="modal-dialog modal-lg">
+                                        <div class="modal-content">
+                                            <div class="modal-header bg-success text-white">
+                                                <h5 class="modal-title"><i class="bi bi-people me-2"></i>实际入住学生</h5>
+                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <table class="table table-sm">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>姓名</th>
+                                                            <th>国籍</th>
+                                                            <th>房间</th>
+                                                            <th>床位类型</th>
+                                                            <th>入住日期</th>
+                                                            <th>到期日期</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for s in day.students %}
+                                                        <tr>
+                                                            <td>{{ s.name }}</td>
+                                                            <td>{{ s.nationality or '-' }}</td>
+                                                            <td>
+                                                                {% if s.room %}
+                                                                {{ s.room.building }}-{{ s.room.room_number }}
+                                                                {% else %}
+                                                                -
+                                                                {% endif %}
+                                                            </td>
+                                                            <td>
+                                                                {% if s.bed_occupancy == 2 %}
+                                                                <span class="badge bg-info">单人间</span>
+                                                                {% else %}
+                                                                <span class="badge bg-secondary">双人间</span>
+                                                                {% endif %}
+                                                            </td>
+                                                            <td>{{ s.check_in_date or '-' }}</td>
+                                                            <td>{{ s.payment_due_date or '-' }}</td>
+                                                        </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}

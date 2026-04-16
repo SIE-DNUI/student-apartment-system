@@ -204,7 +204,11 @@ class Student(db.Model):
         return delta.days
     
     def calculate_arrears(self):
-        """计算欠费金额"""
+        """计算欠费金额
+        
+        注意：单人间的bed_occupancy=2表示占用2个床位，但房费仍按1人计算
+        因为只有1个人住在里面，只是占用了更多的床位资源
+        """
         if not self.fee_standard_id or not self.check_in_date:
             return 0
         
@@ -228,7 +232,9 @@ class Student(db.Model):
         else:
             units = days
         
-        should_pay = units * fee_std.price * self.bed_occupancy
+        # 无论单人间(bed_occupancy=2)还是双人间(bed_occupancy=1)，房费都按1人计算
+        # bed_occupancy只影响房间床位占用情况，不影响个人房费
+        should_pay = units * fee_std.price
         arrears = should_pay - (self.total_paid or 0)
         
         return max(0, round(arrears, 2))

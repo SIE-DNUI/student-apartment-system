@@ -140,7 +140,10 @@ def delete(reservation_id):
 @bp.route('/calendar')
 @login_required
 def calendar():
-    """房间日历视图 - 显示某月每天的房间占用情况"""
+    """房间日历视图 - 显示某月每天的房间占用情况
+    
+    同时考虑入住计划(Reservation)和实际入住学生(Student)的房间占用
+    """
     # 获取年月参数，默认当前月
     year = request.args.get('year', date.today().year, type=int)
     month = request.args.get('month', date.today().month, type=int)
@@ -171,21 +174,83 @@ def calendar():
         Reservation.status != 'cancelled'
     ).all()
     
+    # 获取该月所有已入住的学生（根据check_in_date和预计离开日期）
+    housed_students = Student.query.filter(
+        Student.status == 'active',
+        Student.room_id != None,
+        Student.check_in_date <= month_end,
+        db.or_(
+            Student.check_out_date >= month_start,
+            Student.check_out_date == None
+        )
+    ).all()
+    
+    # 统计实际入住的学生房间占用（按床位占用数计算）
+    # 注意：单人间的bed_occupancy=2，双人间bed_occupancy=1
+    student_room_occupancy = {}  # {room_id: occupied_beds}
+    for student in housed_students:
+        if student.room_id:
+            if student.room_id not in student_room_occupancy:
+                student_room_occupancy[student.room_id] = 0
+            student_room_occupancy[student.room_id] += student.bed_occupancy
+    
+    # 获取所有房间信息用于计算实际占用的房间数
+    all_rooms = {r.id: r for r in Room.query.all()}
+    
+    # 计算实际入住学生占用的房间数
+    actual_occupied_rooms = 0
+    for room_id, occupied_beds in student_room_occupancy.items():
+        room = all_rooms.get(room_id)
+        if room and occupied_beds >= room.capacity:
+            # 如果占用的床位数达到房间容量，则算占用1间
+            actual_occupied_rooms += 1
+        elif room:
+            # 部分占用也算占用1间（因为房间已被使用）
+            actual_occupied_rooms += 1
+    
     # 生成每天的数据
     calendar_days = []
     for day in range(1, days_in_month + 1):
         current_date = date(year, month, day)
         
-        # 计算当天占用的房间数
-        occupied_rooms = 0
+        # 计算当天入住计划占用的房间数
+        occupied_rooms_from_reservations = 0
         day_reservations = []
         
         for res in reservations:
             # 检查计划是否在当天有效
             if res.check_in_date <= current_date:
                 if res.check_out_date is None or res.check_out_date > current_date:
-                    occupied_rooms += res.rooms_needed
+                    occupied_rooms_from_reservations += res.rooms_needed
                     day_reservations.append(res)
+        
+        # 计算当天实际入住学生占用的房间数
+        # 获取当前日期在入住时间段内的学生
+        day_students = []
+        for student in housed_students:
+            if student.check_in_date <= current_date:
+                if student.check_out_date is None or student.check_out_date > current_date:
+                    day_students.append(student)
+        
+        # 计算这些学生占用的房间数
+        day_student_occupancy = {}
+        for student in day_students:
+            if student.room_id:
+                if student.room_id not in day_student_occupancy:
+                    day_student_occupancy[student.room_id] = 0
+                day_student_occupancy[student.room_id] += student.bed_occupancy
+        
+        actual_rooms_for_day = 0
+        for room_id, occupied_beds in day_student_occupancy.items():
+            room = all_rooms.get(room_id)
+            if room and occupied_beds >= room.capacity:
+                actual_rooms_for_day += 1
+            elif room:
+                actual_rooms_for_day += 1
+        
+        # 总占用 = 计划占用 + 实际入住占用（取较大值，避免重复计算）
+        # 如果有实际入住，应该反映真实占用情况
+        occupied_rooms = max(occupied_rooms_from_reservations, actual_rooms_for_day)
         
         # 计算剩余房间数
         available_rooms = total_rooms - occupied_rooms
@@ -199,12 +264,15 @@ def calendar():
             'date': current_date,
             'day': day,
             'occupied_rooms': occupied_rooms,
+            'occupied_from_reservations': occupied_rooms_from_reservations,
+            'occupied_from_students': actual_rooms_for_day,
             'available_rooms': max(0, available_rooms),
             'shortage': shortage,
             'total_rooms': total_rooms,
             'is_weekend': current_date.weekday() >= 5,
             'is_today': current_date == date.today(),
-            'reservations': day_reservations
+            'reservations': day_reservations,
+            'students': day_students
         })
     
     # 获取高峰期预警（缺房的日子）
@@ -215,6 +283,8 @@ def calendar():
         'total_rooms': total_rooms,
         'month_reservations': len(reservations),
         'total_persons': sum(r.person_count for r in reservations),
+        'housed_students': len(housed_students),
+        'actual_occupied_rooms': actual_occupied_rooms,
         'peak_days_count': len(peak_days)
     }
     

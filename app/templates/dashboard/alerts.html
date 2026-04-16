@@ -6,9 +6,66 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">提醒中心</h5>
-        <a href="{{ url_for('dashboard.mark_all_alerts_read') }}" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-check-all me-1"></i> 全部标记已读
-        </a>
+        <div>
+            <a href="{{ url_for('dashboard.mark_all_alerts_read') }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-check-all me-1"></i> 全部标记已读
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- 分类筛选 -->
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('dashboard.alerts') }}" class="btn btn-sm {{ 'btn-primary' if not filter_type else 'btn-outline-secondary' }}">
+                        <i class="bi bi-list-ul me-1"></i>全部
+                    </a>
+                    <a href="{{ url_for('dashboard.alerts_by_type', alert_type='payment_due') }}" class="btn btn-sm {{ 'btn-primary' if filter_type == 'payment_due' else 'btn-outline-secondary' }}">
+                        <i class="bi bi-clock me-1"></i>费用即将到期
+                    </a>
+                    <a href="{{ url_for('dashboard.alerts_by_type', alert_type='payment_overdue') }}" class="btn btn-sm {{ 'btn-primary' if filter_type == 'payment_overdue' else 'btn-outline-secondary' }}">
+                        <i class="bi bi-currency-yen me-1"></i>欠费提醒
+                    </a>
+                    <a href="{{ url_for('dashboard.alerts_by_type', alert_type='residence_permit_expiry') }}" class="btn btn-sm {{ 'btn-primary' if filter_type == 'residence_permit_expiry' else 'btn-outline-secondary' }}">
+                        <i class="bi bi-passport me-1"></i>居留许可到期
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 未分类提醒统计 -->
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <div class="card bg-warning bg-opacity-10 border-warning">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-clock me-2"></i>费用即将到期</span>
+                            <span class="badge bg-warning">{{ stats.due_soon_count or 0 }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-danger bg-opacity-10 border-danger">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-currency-yen me-2"></i>欠费学生</span>
+                            <span class="badge bg-danger">{{ stats.arrears_count or 0 }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-info bg-opacity-10 border-info">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-passport me-2"></i>居留许可到期</span>
+                            <span class="badge bg-info">{{ stats.residence_count or 0 }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     <div class="card-body p-0">
         {% if alerts %}
@@ -20,6 +77,14 @@
                         <span class="badge bg-{{ 'danger' if alert.priority == 'urgent' else 'warning' if alert.priority in ['high', 'normal'] else 'secondary' }} mb-2">
                             {{ '紧急' if alert.priority == 'urgent' else '重要' if alert.priority == 'high' else '一般' }}
                         </span>
+                        {% if alert.alert_type %}
+                        <span class="badge bg-secondary mb-2 ms-1">
+                            {% if alert.alert_type == 'payment_due' %}费用即将到期
+                            {% elif alert.alert_type == 'payment_overdue' %}欠费
+                            {% elif alert.alert_type == 'residence_permit_expiry' %}居留许可
+                            {% else %}{{ alert.alert_type }}{% endif %}
+                        </span>
+                        {% endif %}
                         <h6 class="mb-1">{{ alert.title }}</h6>
                         <p class="mb-1 text-muted small">{{ alert.message }}</p>
                         <small class="text-muted">{{ alert.created_at.strftime('%Y-%m-%d %H:%M') }}</small>

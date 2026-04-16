@@ -66,6 +66,7 @@
                             <th>性别</th>
                             <th>国籍</th>
                             <th>房间</th>
+                            <th>房型</th>
                             <th>入住日期</th>
                             <th>到期日期</th>
                             <th>居留许可</th>
@@ -99,6 +100,17 @@
                                 </a>
                                 {% else %}
                                 <span class="text-muted">未分配</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if student.room_id %}
+                                    {% if student.bed_occupancy == 2 %}
+                                    <span class="badge bg-info">单人间</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">双人间</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td>{{ student.check_in_date or '-' }}</td>
@@ -179,7 +191,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="11" class="text-center py-4 text-muted">
+                            <td colspan="12" class="text-center py-4 text-muted">
                                 <i class="bi bi-people" style="font-size: 2rem;"></i>
                                 <p class="mt-2 mb-0">暂无学生数据</p>
                                 <a href="{{ url_for('students.batch_import') }}">批量导入</a>
