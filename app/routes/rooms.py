@@ -338,7 +338,7 @@ def status():
     total_capacity = db.session.query(db.func.sum(Room.capacity)).scalar() or 0
     total_occupancy = db.session.query(db.func.sum(Room.current_occupancy)).scalar() or 0
     
-    available_rooms = Room.query.filter(Room.current_occupancy < Room.capacity).count()
+    available_rooms = Room.query.filter(Room.current_occupancy == 0).count()  # 完全空的房间（无人入住）
     full_rooms = Room.query.filter(Room.current_occupancy >= Room.capacity).count()
     
     buildings = db.session.query(
