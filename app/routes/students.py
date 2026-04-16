@@ -357,48 +357,107 @@ def batch_import():
             success_count = 0
             error_count = 0
             
+            def parse_date(date_value):
+                """解析日期，支持字符串和datetime对象"""
+                if not date_value:
+                    return None
+                if isinstance(date_value, datetime):
+                    return date_value.date()
+                if isinstance(date_value, date):
+                    return date_value
+                # 字符串格式 YYYY-MM-DD 或 YYYY/MM/DD
+                date_str = str(date_value).strip()
+                try:
+                    return datetime.strptime(date_str, '%Y-%m-%d').date()
+                except:
+                    try:
+                        return datetime.strptime(date_str, '%Y/%m/%d').date()
+                    except:
+                        return None
+            
             for row in ws.iter_rows(min_row=2, values_only=True):
-                if not row[0]:
+                if not row[0]:  # 姓名为空则跳过
                     continue
                 
                 row_data = dict(zip(headers, row))
                 
                 try:
                     student = Student()
-                    student.name = row_data.get('姓名', '')
-                    student.gender = row_data.get('性别', '')
-                    student.nationality = row_data.get('国籍', '')
-                    student.passport_number = row_data.get('护照号码', '')
-                    student.major = row_data.get('专业', '')
+                    
+                    # 基本信息
+                    student.name = str(row_data.get('姓名', '')).strip()
+                    student.gender = str(row_data.get('性别', '')).strip() if row_data.get('性别') else None
+                    student.nationality = str(row_data.get('国籍', '')).strip() if row_data.get('国籍') else None
+                    student.passport_number = str(row_data.get('护照号码', '')).strip() if row_data.get('护照号码') else None
+                    student.major = str(row_data.get('专业', '')).strip() if row_data.get('专业') else None
+                    
+                    # 房间类型处理
+                    room_type = row_data.get('房间类型', '')
+                    if room_type and '单人间' in str(room_type):
+                        student.bed_occupancy = 2  # 单人间占用2个床位
+                    else:
+                        student.bed_occupancy = 1  # 双人间占用1个床位
                     
                     # 处理楼栋号和房间号
                     building = row_data.get('楼栋号', '')
                     room_number = row_data.get('房间号', '')
                     
                     if building and room_number:
+                        building = str(building).strip()
+                        room_number = str(room_number).strip()
                         # 查找对应房间
                         room = Room.query.filter_by(building=building, room_number=room_number).first()
                         if room:
-                            if room.current_occupancy < room.capacity:
+                            # 检查房间容量是否足够
+                            if room.current_occupancy + student.bed_occupancy <= room.capacity:
                                 student.room_id = room.id
-                                room.current_occupancy += 1
+                                room.current_occupancy += student.bed_occupancy
                                 if room.current_occupancy >= room.capacity:
                                     room.status = 'full'
                             else:
-                                # 房间已满，记录但不分配
+                                # 房间容量不足，记录警告但不分配
                                 pass
+                    
+                    student.check_in_date = parse_date(row_data.get('入住日期'))
+                    student.check_out_date = parse_date(row_data.get('预计离开日期'))
+                    student.payment_due_date = parse_date(row_data.get('缴费到期日期'))
+                    student.residence_permit_expiry = parse_date(row_data.get('居留许可到期日期'))
                     
                     # 处理收费标准
                     fee_standard_name = row_data.get('收费标准', '')
                     if fee_standard_name:
-                        fee_standard = FeeStandard.query.filter_by(name=fee_standard_name, is_active=True).first()
+                        fee_standard = FeeStandard.query.filter_by(name=str(fee_standard_name).strip(), is_active=True).first()
                         if fee_standard:
                             student.fee_standard_id = fee_standard.id
                     
-                    student.notes = row_data.get('备注', '')
+                    # 处理本次缴纳房费
+                    current_payment = row_data.get('本次缴纳房费', 0)
+                    payment_amount_to_record = 0
+                    if current_payment:
+                        try:
+                            payment_amount_to_record = float(current_payment)
+                            if payment_amount_to_record > 0:
+                                student.total_paid = payment_amount_to_record
+                        except:
+                            payment_amount_to_record = 0
+                    
+                    student.notes = str(row_data.get('备注', '')).strip() if row_data.get('备注') else None
                     student.status = 'active'
                     
                     db.session.add(student)
+                    db.session.flush()  # 获取student.id
+                    
+                    # 创建缴费记录（在flush之后，student.id已生成）
+                    if payment_amount_to_record > 0:
+                        fee_record = FeeRecord(
+                            student_id=student.id,
+                            amount=payment_amount_to_record,
+                            payment_date=date.today(),
+                            payment_method='批量导入',
+                            notes='批量导入时录入'
+                        )
+                        db.session.add(fee_record)
+                    
                     success_count += 1
                     
                 except Exception as e:
@@ -489,55 +548,94 @@ def student_fees(id):
 @bp.route('/export-template')
 @login_required
 def export_template():
-    """下载学生导入模板（带下拉菜单）"""
+    """下载学生导入模板（带下拉菜单）
+    
+    包含添加学生页面的所有字段（除已缴房费总计）
+    """
     from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment, PatternFill
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from openpyxl.worksheet.datavalidation import DataValidation
     
     wb = Workbook()
     ws = wb.active
     ws.title = '学生导入模板'
     
-    # 表头 - 房间号拆成楼栋号和房间号两列
-    headers = ['姓名', '性别', '国籍', '护照号码', '专业', '楼栋号', '房间号', '收费标准', '备注']
+    # 表头 - 包含添加学生页面的所有字段
+    headers = [
+        '姓名', '性别', '国籍', '护照号码', '专业', 
+        '楼栋号', '房间号', '房间类型', 
+        '入住日期', '预计离开日期', 
+        '收费标准', '本次缴纳房费', '缴费到期日期', 
+        '居留许可到期日期', '备注'
+    ]
     
     # 设置表头样式
     header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
     header_font = Font(bold=True, color='FFFFFF')
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
     
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.fill = header_fill
         cell.font = header_font
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
     
     # 设置列宽
-    ws.column_dimensions['A'].width = 12
-    ws.column_dimensions['B'].width = 8
-    ws.column_dimensions['C'].width = 10
-    ws.column_dimensions['D'].width = 15
-    ws.column_dimensions['E'].width = 15
-    ws.column_dimensions['F'].width = 12
-    ws.column_dimensions['G'].width = 12
-    ws.column_dimensions['H'].width = 15
-    ws.column_dimensions['I'].width = 20
+    column_widths = {
+        'A': 12,  # 姓名
+        'B': 8,   # 性别
+        'C': 12,  # 国籍
+        'D': 15,  # 护照号码
+        'E': 18,  # 专业
+        'F': 10,  # 楼栋号
+        'G': 10,  # 房间号
+        'H': 12,  # 房间类型
+        'I': 14,  # 入住日期
+        'J': 14,  # 预计离开日期
+        'K': 15,  # 收费标准
+        'L': 14,  # 本次缴纳房费
+        'M': 14,  # 缴费到期日期
+        'N': 16,  # 居留许可到期日期
+        'O': 25,  # 备注
+    }
+    for col, width in column_widths.items():
+        ws.column_dimensions[col].width = width
     
-    # 获取所有楼栋号和房间号
-    from app.models import Room
+    # 设置行高
+    ws.row_dimensions[1].height = 25
+    
+    # 获取系统数据用于下拉菜单
+    from app.models import Room, FeeStandard
+    
+    # 楼栋号列表
     rooms = Room.query.filter(Room.status != 'archived').all()
-    
-    # 楼栋号列表（去重）
     building_list = sorted(set(r.building for r in rooms if r.building))
-    
-    # 房间号列表
     room_number_list = sorted(set(r.room_number for r in rooms if r.room_number))
     
-    # 获取所有收费标准
-    from app.models import FeeStandard
+    # 收费标准列表
     fee_standards = FeeStandard.query.filter_by(is_active=True).all()
     fee_list = [fs.name for fs in fee_standards if fs.name]
     
-    # 添加楼栋号下拉菜单（F列）
+    # 1. 性别下拉菜单 (B列)
+    gender_dv = DataValidation(
+        type="list",
+        formula1='"男,女,其他"',
+        allow_blank=True
+    )
+    gender_dv.error = '请从下拉列表中选择性别'
+    gender_dv.errorTitle = '无效的性别'
+    gender_dv.prompt = '请选择性别'
+    gender_dv.promptTitle = '性别'
+    ws.add_data_validation(gender_dv)
+    gender_dv.add('B2:B1000')
+    
+    # 2. 楼栋号下拉菜单 (F列)
     if building_list:
         building_options = ','.join(building_list)
         building_dv = DataValidation(
@@ -552,7 +650,7 @@ def export_template():
         ws.add_data_validation(building_dv)
         building_dv.add('F2:F1000')
     
-    # 添加房间号下拉菜单（G列）
+    # 3. 房间号下拉菜单 (G列)
     if room_number_list:
         room_options = ','.join(room_number_list)
         room_dv = DataValidation(
@@ -567,7 +665,20 @@ def export_template():
         ws.add_data_validation(room_dv)
         room_dv.add('G2:G1000')
     
-    # 添加收费标准下拉菜单（H列）
+    # 4. 房间类型下拉菜单 (H列)
+    room_type_dv = DataValidation(
+        type="list",
+        formula1='"双人间（占1床位）,单人间（占2床位）"',
+        allow_blank=True
+    )
+    room_type_dv.error = '请从下拉列表中选择房间类型'
+    room_type_dv.errorTitle = '无效的房间类型'
+    room_type_dv.prompt = '单人间独享整个房间'
+    room_type_dv.promptTitle = '房间类型'
+    ws.add_data_validation(room_type_dv)
+    room_type_dv.add('H2:H1000')
+    
+    # 5. 收费标准下拉菜单 (K列)
     if fee_list:
         fee_options = ','.join(fee_list)
         fee_dv = DataValidation(
@@ -580,29 +691,57 @@ def export_template():
         fee_dv.prompt = '请选择收费标准'
         fee_dv.promptTitle = '收费标准'
         ws.add_data_validation(fee_dv)
-        fee_dv.add('H2:H1000')
-    
-    # 添加性别下拉菜单（B列）
-    gender_dv = DataValidation(
-        type="list",
-        formula1='"男,女"',
-        allow_blank=True
-    )
-    ws.add_data_validation(gender_dv)
-    gender_dv.add('B2:B1000')
+        fee_dv.add('K2:K1000')
     
     # 添加示例数据
+    today = date.today().strftime('%Y-%m-%d')
     sample_data = [
-        ['张三', '男', '中国', '', '计算机科学与技术', 
-         building_list[0] if building_list else '', 
-         room_number_list[0] if room_number_list else '', 
-         fee_list[0] if fee_list else '', ''],
-        ['李四', '女', '美国', 'P1234567', '软件工程', '', '', '', ''],
+        [
+            '张三', '男', '中国', '', '计算机科学与技术',
+            building_list[0] if building_list else '',
+            room_number_list[0] if room_number_list else '',
+            '双人间（占1床位）',
+            today, '',
+            fee_list[0] if fee_list else '', '0', '',
+            '', ''
+        ],
+        [
+            '李四', '女', '美国', 'P1234567', '软件工程',
+            '', '', '单人间（占2床位）',
+            today, '',
+            fee_list[0] if fee_list else '', '0', '',
+            '', ''
+        ],
     ]
+    
+    # 设置数据行样式
+    data_fill = PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
     
     for row_idx, row_data in enumerate(sample_data, 2):
         for col_idx, value in enumerate(row_data, 1):
-            ws.cell(row=row_idx, column=col_idx, value=value)
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.alignment = Alignment(vertical='center')
+            cell.border = thin_border
+            if row_idx == 2:  # 第一行示例数据高亮
+                cell.fill = data_fill
+    
+    # 添加说明行
+    note_row = len(sample_data) + 3
+    ws.cell(row=note_row, column=1, value='填写说明：')
+    ws.cell(row=note_row, column=1).font = Font(bold=True, color='FF0000')
+    
+    notes = [
+        '1. 姓名为必填项',
+        '2. 日期格式：YYYY-MM-DD（如 2026-04-16）',
+        '3. 房间类型：双人间占用1个床位，单人间占用2个床位（独享房间）',
+        '4. 本次缴纳房费：首次缴纳金额，如不缴纳填0或不填',
+        '5. 缴费到期日期：根据收费标准计算，或手动填写',
+        '6. 居留许可到期日期：外国学生必填，用于到期提醒',
+    ]
+    
+    for i, note in enumerate(notes):
+        ws.cell(row=note_row + 1 + i, column=1, value=note)
+        ws.merge_cells(start_row=note_row + 1 + i, start_column=1, end_row=note_row + 1 + i, end_column=8)
     
     # 保存到内存
     output = io.BytesIO()
