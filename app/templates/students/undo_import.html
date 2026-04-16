@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}撤销最近导入{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>撤销最近导入的学生</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning">
+            <i class="bi bi-info-circle me-2"></i>
+            此操作将删除<strong>最近1小时内</strong>导入的所有学生记录，包括已分配房间的学生。
+            <br>删除后<strong>无法恢复</strong>，请确认是否继续。
+        </div>
+        
+        {% if students %}
+        <h6>即将删除的学生 ({{ students|length }} 人)：</h6>
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-hover">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th>姓名</th>
+                        <th>国籍</th>
+                        <th>房间</th>
+                        <th>导入时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td>{{ student.name }}</td>
+                        <td>{{ student.nationality or '-' }}</td>
+                        <td>
+                            {% if student.room %}
+                            {{ student.room.building }}-{{ student.room.room_number }}
+                            {% else %}
+                            <span class="text-muted">未分配</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if student.created_at %}
+                            {{ student.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <hr>
+        <form method="POST" onsubmit="return confirm('确定要删除这 {{ students|length }} 名学生吗？此操作不可撤销！')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger">
+                    <i class="bi bi-trash me-1"></i>确认删除 {{ students|length }} 名学生
+                </button>
+                <a href="{{ url_for('students.index') }}" class="btn btn-outline-secondary">
+                    取消
+                </a>
+            </div>
+        </form>
+        
+        {% else %}
+        <div class="text-center py-4">
+            <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+            <p class="mt-3">没有找到最近1小时内导入的学生记录</p>
+            <a href="{{ url_for('students.index') }}" class="btn btn-primary">返回学生列表</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

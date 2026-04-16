@@ -414,6 +414,66 @@ def batch_import():
             return redirect(request.url)
     
     return render_template('students/batch_import.html', title='批量导入学生')
+
+
+@bp.route('/undo-recent-import', methods=['GET', 'POST'])
+@login_required
+def undo_recent_import():
+    """撤销最近批量导入的学生
+    
+    删除最近1小时内创建的学生记录
+    """
+    if request.method == 'POST':
+        # 获取最近1小时内创建的学生
+        from datetime import datetime, timedelta
+        cutoff_time = datetime.utcnow() - timedelta(hours=1)
+        
+        # 查询最近创建的学生（未分配房间的优先，避免影响房间状态）
+        recent_students = Student.query.filter(
+            Student.created_at >= cutoff_time,
+            Student.status == 'active'
+        ).all()
+        
+        if not recent_students:
+            flash('没有找到最近导入的学生记录', 'warning')
+            return redirect(url_for('students.index'))
+        
+        count = 0
+        for student in recent_students:
+            # 解除房间关联（如果有的话）
+            if student.room_id:
+                # 更新房间占用
+                room = Room.query.get(student.room_id)
+                if room:
+                    room.current_occupancy -= student.bed_occupancy
+                student.room_id = None
+            
+            # 删除学生的缴费记录
+            FeeRecord.query.filter_by(student_id=student.id).delete()
+            
+            # 删除学生
+            db.session.delete(student)
+            count += 1
+        
+        db.session.commit()
+        flash(f'已撤销最近导入的 {count} 名学生', 'success')
+        return redirect(url_for('students.index'))
+    
+    # GET请求 - 显示确认页面
+    from datetime import datetime, timedelta
+    cutoff_time = datetime.utcnow() - timedelta(hours=1)
+    
+    recent_students = Student.query.filter(
+        Student.created_at >= cutoff_time,
+        Student.status == 'active'
+    ).order_by(Student.created_at.desc()).limit(100).all()
+    
+    return render_template('students/undo_import.html', 
+                         title='撤销最近导入',
+                         students=recent_students)
+
+
+@bp.route('/<int:id>/fees')
 @login_required
 def student_fees(id):
     """学生缴费记录"""
