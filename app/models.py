@@ -95,6 +95,13 @@ class Room(db.Model):
         """是否有空床位"""
         return self.current_occupancy < self.capacity
     
+    @property
+    def occupancy_rate(self):
+        """入住率（百分比）"""
+        if self.capacity == 0:
+            return 0
+        return round((self.current_occupancy / self.capacity) * 100, 1)
+    
     def __repr__(self):
         return f'<Room {self.building}-{self.room_number}>'
 
