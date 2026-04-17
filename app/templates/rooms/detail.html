@@ -115,7 +115,7 @@
                     <tr>
                         <td>{{ student.student_id or '-' }}</td>
                         <td>
-                            <a href="{{ url_for('students.detail', student_id=student.id) }}">
+                            <a href="{{ url_for('students.detail', id=student.id) }}">
                                 {{ student.name }}
                             </a>
                         </td>
@@ -133,7 +133,7 @@
                             {% else %}-{% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('students.detail', student_id=student.id) }}" class="btn btn-sm btn-outline-info">
+                            <a href="{{ url_for('students.detail', id=student.id) }}" class="btn btn-sm btn-outline-info">
                                 <i class="bi bi-eye"></i>
                             </a>
                         </td>
