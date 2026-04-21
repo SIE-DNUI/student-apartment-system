@@ -236,9 +236,9 @@ def calendar():
                 actual_rooms_for_day += 1
                 day_students.extend(active_students)
         
-        # 总占用 = 计划占用 + 实际入住占用（取较大值，避免重复计算）
-        # 如果有实际入住，应该反映真实占用情况
-        occupied_rooms = max(occupied_rooms_from_reservations, actual_rooms_for_day)
+        # 总占用 = 学生实际占用 + 入住计划预定
+        # 入住计划是"预定"，应该额外计算，不应和学生占用取最大值
+        occupied_rooms = actual_rooms_for_day + occupied_rooms_from_reservations
         
         # 计算剩余房间数
         available_rooms = total_rooms - occupied_rooms
@@ -397,8 +397,8 @@ def stats():
             if active_students:
                 occupied_from_students += 1
         
-        # 取两者较大值
-        occupied = max(occupied_from_plans, occupied_from_students)
+        # 总占用 = 学生实际占用 + 入住计划预定
+        occupied = occupied_from_students + occupied_from_plans
         
         if occupied > total_rooms:
             peak_analysis.append({
