@@ -485,17 +485,45 @@ def batch_import():
                     except:
                         person_count = 0
                     
-                    if person_count <= 0:
-                        rooms_str = str(row_data.get('需要房间数', 0)).strip()
-                        try:
-                            rooms_needed = int(rooms_str)
-                            person_count = rooms_needed * 2
-                        except:
-                            person_count = 2
+                    # 解析单人间数量
+                    single_rooms_str = str(row_data.get('单人间数量', 0) or row_data.get('单人间', 0) or 0).strip()
+                    try:
+                        single_rooms = int(single_rooms_str) if single_rooms_str else 0
+                    except:
+                        single_rooms = 0
                     
-                    # 计算需要房间数（每间2人）
-                    total_beds_per_room = 2
-                    rooms_needed = (person_count + total_beds_per_room - 1) // total_beds_per_room
+                    # 解析双人间数量
+                    double_rooms_str = str(row_data.get('双人间数量', 0) or row_data.get('双人间', 0) or 0).strip()
+                    try:
+                        double_rooms = int(double_rooms_str) if double_rooms_str else 0
+                    except:
+                        double_rooms = 0
+                    
+                    # 解析用户指定的房间数
+                    rooms_str = str(row_data.get('需要房间数', 0)).strip()
+                    try:
+                        rooms_needed_user = int(rooms_str) if rooms_str else 0
+                    except:
+                        rooms_needed_user = 0
+                    
+                    # 计算房间数：优先使用用户指定的值，否则根据单人间/双人间计算
+                    if rooms_needed_user > 0:
+                        # 用户明确指定了房间数，直接使用
+                        rooms_needed = rooms_needed_user
+                        # 如果入住人数为0，根据房间数估算（假设双人间）
+                        if person_count <= 0:
+                            person_count = rooms_needed * 2
+                    elif single_rooms > 0 or double_rooms > 0:
+                        # 根据单人间和双人间计算
+                        rooms_needed = single_rooms + double_rooms
+                        # 单人间1人，双人间2人
+                        person_count = single_rooms * 1 + double_rooms * 2 if person_count <= 0 else person_count
+                    else:
+                        # 都没填，按入住人数自动计算（默认双人间）
+                        if person_count <= 0:
+                            person_count = 2
+                        # 向上取整
+                        rooms_needed = (person_count + 1) // 2
                     
                     # 创建入住计划
                     reservation = Reservation(
@@ -557,7 +585,7 @@ def template_download():
     header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
     header_font = Font(color='FFFFFF', bold=True)
     
-    headers = ['部门', '国籍/团体名称', '入住时间', '离开时间', '入住人数', '需要房间数', '备注']
+    headers = ['部门', '国籍/团体名称', '入住时间', '离开时间', '入住人数', '单人间数量', '双人间数量', '需要房间数', '备注']
     
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
@@ -567,9 +595,9 @@ def template_download():
     
     # 添加示例数据
     example_data = [
-        ['国际交流处', '美国交换生团', '2024-03-01', '2024-06-30', 20, 10, '春季学期交换生'],
-        ['人事处', '新入职教师', '2024-03-05', '2024-08-31', 6, 3, ''],
-        ['国际交流处', '德国暑期研学团', '2024-07-01', '2024-07-31', 40, 20, ''],
+        ['国际交流处', '美国交换生团', '2024-03-01', '2024-06-30', 20, 0, 10, 10, '春季学期交换生'],
+        ['人事处', '新入职教师', '2024-03-05', '2024-08-31', 6, 2, 2, 4, '2人需单人间'],
+        ['国际交流处', '德国暑期研学团', '2024-07-01', '2024-07-31', 40, 0, 20, 20, ''],
     ]
     
     for row_idx, row_data in enumerate(example_data, 2):
@@ -583,7 +611,9 @@ def template_download():
     ws.column_dimensions['D'].width = 15
     ws.column_dimensions['E'].width = 12
     ws.column_dimensions['F'].width = 12
-    ws.column_dimensions['G'].width = 20
+    ws.column_dimensions['G'].width = 12
+    ws.column_dimensions['H'].width = 12
+    ws.column_dimensions['I'].width = 20
     
     # 保存
     output = io.BytesIO()

@@ -37,7 +37,13 @@
                     <li>下载模板文件，按格式填写入住计划数据</li>
                     <li>支持"总表"工作表（优先）或第一个工作表</li>
                     <li>系统会自动处理Excel日期格式（如序列号46191转换为日期）</li>
-                    <li>按每间2人自动计算所需房间数</li>
+                    <li><strong>房间数计算规则（按优先级）：</strong>
+                        <ul class="mt-1">
+                            <li>① 如果填写了"需要房间数"，直接使用该值</li>
+                            <li>② 如果填写了"单人间数量"或"双人间数量"，自动计算</li>
+                            <li>③ 否则按入住人数÷2自动计算（向上取整）</li>
+                        </ul>
+                    </li>
                     <li>相同团体名称会被识别为一个入住计划</li>
                 </ol>
             </div>
@@ -57,9 +63,15 @@
                             <li>入住人数</li>
                         </ul>
                         
+                        <p class="mb-2"><strong>房间数填写方式（三选一）：</strong></p>
+                        <ul class="small">
+                            <li><strong>方式1：</strong>直接填"需要房间数"</li>
+                            <li><strong>方式2：</strong>填"单人间数量"+"双人间数量"</li>
+                            <li><strong>方式3：</strong>都不填，按入住人数自动计算</li>
+                        </ul>
+                        
                         <p class="mb-2"><strong>可选列：</strong></p>
                         <ul class="small mb-0">
-                            <li>需要房间数（可自动计算）</li>
                             <li>备注</li>
                         </ul>
                     </div>
