@@ -175,7 +175,7 @@
                                 <a href="{{ url_for('students.detail', id=student.id) }}" class="btn btn-sm btn-outline-info" title="详情">
                                     <i class="bi bi-eye"></i>
                                 </a>
-                                <a href="{{ url_for('students.edit', id=student.id) }}" class="btn btn-sm btn-outline-primary" title="编辑">
+                                <a href="{{ url_for('students.edit', id=student.id, page=pagination.page) }}" class="btn btn-sm btn-outline-primary" title="编辑">
                                     <i class="bi bi-pencil"></i>
                                 </a>
                                 <form method="POST" action="{{ url_for('students.delete', id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要删除该学生吗？此操作将归档该学生记录。')">

@@ -178,34 +178,30 @@ def calendar():
     housed_students = Student.query.filter(
         Student.status == 'active',
         Student.room_id != None,
-        Student.check_in_date <= month_end,
-        db.or_(
-            Student.check_out_date >= month_start,
-            Student.check_out_date == None
-        )
+        Student.check_in_date <= month_end
     ).all()
     
-    # 统计实际入住的学生房间占用（按床位占用数计算）
-    # 注意：单人间的bed_occupancy=2，双人间bed_occupancy=1
-    student_room_occupancy = {}  # {room_id: occupied_beds}
-    for student in housed_students:
-        if student.room_id:
-            if student.room_id not in student_room_occupancy:
-                student_room_occupancy[student.room_id] = 0
-            student_room_occupancy[student.room_id] += student.bed_occupancy
-    
-    # 获取所有房间信息用于计算实际占用的房间数
+    # 获取所有房间信息
     all_rooms = {r.id: r for r in Room.query.all()}
     
-    # 计算实际入住学生占用的房间数
+    # 按房间组织学生数据，用于每天计算
+    # room_students = {room_id: [student1, student2, ...]}
+    room_students = {}
+    for student in housed_students:
+        if student.room_id:
+            if student.room_id not in room_students:
+                room_students[student.room_id] = []
+            room_students[student.room_id].append(student)
+    
+    # 计算实际入住学生占用的房间数（基于当前有效入住）
     actual_occupied_rooms = 0
-    for room_id, occupied_beds in student_room_occupancy.items():
-        room = all_rooms.get(room_id)
-        if room and occupied_beds >= room.capacity:
-            # 如果占用的床位数达到房间容量，则算占用1间
-            actual_occupied_rooms += 1
-        elif room:
-            # 部分占用也算占用1间（因为房间已被使用）
+    for room_id, students in room_students.items():
+        # 检查房间中是否有有效入住的学生（入住日期<=今天 且 (离开日期为空 或 离开日期>今天)）
+        has_active = any(
+            s.check_in_date <= date.today() and (s.check_out_date is None or s.check_out_date > date.today())
+            for s in students
+        )
+        if has_active:
             actual_occupied_rooms += 1
     
     # 生成每天的数据
@@ -225,28 +221,20 @@ def calendar():
                     day_reservations.append(res)
         
         # 计算当天实际入住学生占用的房间数
-        # 获取当前日期在入住时间段内的学生
+        # 按房间检查：如果房间中有任一学生在当天有效入住，则房间被占用
+        # 有效入住 = 入住日期<=当天 且 (离开日期为空 或 离开日期>当天)
         day_students = []
-        for student in housed_students:
-            if student.check_in_date <= current_date:
-                if student.check_out_date is None or student.check_out_date > current_date:
-                    day_students.append(student)
-        
-        # 计算这些学生占用的房间数
-        day_student_occupancy = {}
-        for student in day_students:
-            if student.room_id:
-                if student.room_id not in day_student_occupancy:
-                    day_student_occupancy[student.room_id] = 0
-                day_student_occupancy[student.room_id] += student.bed_occupancy
-        
         actual_rooms_for_day = 0
-        for room_id, occupied_beds in day_student_occupancy.items():
-            room = all_rooms.get(room_id)
-            if room and occupied_beds >= room.capacity:
+        
+        for room_id, students in room_students.items():
+            # 检查该房间中当天有效的学生
+            active_students = [
+                s for s in students
+                if s.check_in_date <= current_date and (s.check_out_date is None or s.check_out_date > current_date)
+            ]
+            if active_students:
                 actual_rooms_for_day += 1
-            elif room:
-                actual_rooms_for_day += 1
+                day_students.extend(active_students)
         
         # 总占用 = 计划占用 + 实际入住占用（取较大值，避免重复计算）
         # 如果有实际入住，应该反映真实占用情况
@@ -355,6 +343,19 @@ def stats():
         Reservation.status != 'cancelled'
     ).all()
     
+    # 获取所有已入住学生，按房间组织
+    all_students = Student.query.filter(
+        Student.status == 'active',
+        Student.room_id != None
+    ).all()
+    
+    room_students = {}
+    for student in all_students:
+        if student.room_id:
+            if student.room_id not in room_students:
+                room_students[student.room_id] = []
+            room_students[student.room_id].append(student)
+    
     # 获取未来90天的数据
     future_date = date.today() + timedelta(days=90)
     future_reservations = [r for r in all_reservations 
@@ -372,16 +373,32 @@ def stats():
             monthly_stats[month_key]['persons'] += res.person_count
             monthly_stats[month_key]['rooms'] += res.rooms_needed
     
-    # 找出高峰期
+    # 找出高峰期（同时考虑入住计划和学生预计离开日期）
     peak_analysis = []
     for d in range(0, 91):
         current = date.today() + timedelta(days=d)
-        occupied = 0
+        
+        # 计算入住计划占用的房间数
+        occupied_from_plans = 0
         for res in all_reservations:
             if res.check_in_date <= current:
                 if res.check_out_date is None or res.check_out_date > current:
                     if res.check_in_date <= future_date:
-                        occupied += res.rooms_needed
+                        occupied_from_plans += res.rooms_needed
+        
+        # 计算实际入住学生占用的房间数（考虑预计离开日期）
+        occupied_from_students = 0
+        for room_id, students in room_students.items():
+            # 检查该房间中当天有效的学生
+            active_students = [
+                s for s in students
+                if s.check_in_date <= current and (s.check_out_date is None or s.check_out_date > current)
+            ]
+            if active_students:
+                occupied_from_students += 1
+        
+        # 取两者较大值
+        occupied = max(occupied_from_plans, occupied_from_students)
         
         if occupied > total_rooms:
             peak_analysis.append({

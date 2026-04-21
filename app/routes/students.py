@@ -147,6 +147,9 @@ def edit(id):
     student = Student.query.get_or_404(id)
     form = StudentForm(obj=student)
     
+    # 获取来源页码，用于返回原页面
+    page = request.args.get('page', 1, type=int)
+    
     available_rooms = Room.query.filter(
         (Room.current_occupancy < Room.capacity) | (Room.id == student.room_id)
     ).all()
@@ -182,9 +185,9 @@ def edit(id):
         
         db.session.commit()
         flash('学生信息更新成功！', 'success')
-        return redirect(url_for('students.index'))
+        return redirect(url_for('students.index', page=page))
     
-    return render_template('students/edit.html', title='编辑学生', form=form, student=student)
+    return render_template('students/edit.html', title='编辑学生', form=form, student=student, page=page)
 
 
 @bp.route('/delete/<int:id>', methods=['POST'])
