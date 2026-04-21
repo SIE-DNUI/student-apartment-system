@@ -64,14 +64,14 @@
                             <th width="40">
                                 <input type="checkbox" id="select-all" title="全选">
                             </th>
-                            <th>学号</th>
+                            <th>专业</th>
                             <th>姓名</th>
                             <th>性别</th>
                             <th>国籍</th>
                             <th>房间</th>
                             <th>房型</th>
                             <th>入住日期</th>
-                            <th>到期日期</th>
+                            <th>预计离开日期</th>
                             <th>居留许可</th>
                             <th>状态</th>
                             <th>操作</th>
@@ -83,7 +83,7 @@
                             <td>
                                 <input type="checkbox" name="student_ids" value="{{ student.id }}" class="student-checkbox">
                             </td>
-                            <td>{{ student.student_id or '-' }}</td>
+                            <td>{{ student.major or '-' }}</td>
                             <td>
                                 <a href="{{ url_for('students.detail', id=student.id) }}">
                                     {{ student.name }}
@@ -117,17 +117,7 @@
                                 {% endif %}
                             </td>
                             <td>{{ student.check_in_date or '-' }}</td>
-                            <td>
-                                {% if student.payment_due_date %}
-                                    {% if student.is_payment_overdue() %}
-                                    <span class="text-danger">{{ student.payment_due_date }} <small>(过期)</small></span>
-                                    {% else %}
-                                    {{ student.payment_due_date }}
-                                    {% endif %}
-                                {% else %}
-                                -
-                                {% endif %}
-                            </td>
+                            <td>{{ student.check_out_date or '-' }}</td>
                             <td>
                                 {% if student.residence_permit_expiry %}
                                     {% if student.is_residence_permit_expired() %}
