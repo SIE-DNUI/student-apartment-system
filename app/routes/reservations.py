@@ -527,14 +527,15 @@ def batch_import():
                     
                     # 创建入住计划
                     reservation = Reservation(
-                        department=department if department and department != 'None' else None,
-                        group_name=group_name if group_name and group_name != 'None' else None,
+                        department=department if department and department != 'None' else '',
+                        group_name=group_name if group_name and group_name != 'None' else '',
                         person_count=person_count,
                         rooms_needed=rooms_needed,
+                        student_name='',  # 数据库约束要求非空，给空字符串
                         check_in_date=check_in_date,
                         check_out_date=check_out_date,
                         status='pending',
-                        notes=str(row_data.get('备注', '')).strip()
+                        notes=str(row_data.get('备注', '')).strip() if row_data.get('备注') else ''
                     )
                     
                     # 计算天数
