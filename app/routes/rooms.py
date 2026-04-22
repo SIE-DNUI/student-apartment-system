@@ -454,8 +454,15 @@ def building_overview(building):
         occupied_beds = sum(s.bed_occupancy for s in active_students)
         empty_beds = total_beds - occupied_beds
         
-        # 判断房型：单人间(capacity=1)或学生占用2个床位，双人间反之
-        room_type = '单' if room.capacity == 1 else '双'
+        # 判断房型：根据入住学生的收费标准
+        # 单人间收费标准的学生 bed_occupancy=2（一人占全间）
+        # 双人间收费标准的学生 bed_occupancy=1（一人占一床）
+        if active_students:
+            # 如果有学生是单人间标准(bed_occupancy=2)，则该房间显示为"单"
+            room_type = '单' if any(s.bed_occupancy == 2 for s in active_students) else '双'
+        else:
+            # 空房间默认显示双人间
+            room_type = '双'
         
         floors_data[floor].append({
             'room': room,
