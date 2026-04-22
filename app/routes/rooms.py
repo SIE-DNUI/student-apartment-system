@@ -463,10 +463,14 @@ def building_overview(building):
     partial_rooms = sum(1 for f_data in floors_data.values() for r in f_data if r['has_partial'])
     full_rooms = total_rooms - empty_rooms - partial_rooms
     
+    # 楼层从高到低排序
+    floors_sorted = sorted(floors_data.keys(), reverse=True)
+    
     return render_template('rooms/building_overview.html',
                          title=f'{building}号楼房间一览',
                          building=building,
                          floors_data=floors_data,
+                         floors_sorted=floors_sorted,
                          buildings=buildings,
                          stats={
                              'total': total_rooms,
