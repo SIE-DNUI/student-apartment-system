@@ -229,7 +229,7 @@
                 <h5 class="modal-title" id="batchEditModalLabel">
                     <i class="bi bi-pencil-square me-2"></i>批量修改学生信息
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                <button type="button" class="btn-close" onclick="closeBatchEditModal()" aria-label="关闭"></button>
             </div>
             <form method="POST" action="{{ url_for('students.batch_edit') }}" id="batch-edit-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -270,7 +270,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeBatchEditModal()">取消</button>
                     <button type="button" class="btn btn-primary" onclick="submitBatchEdit()">
                         <i class="bi bi-check-lg me-1"></i>确认修改
                     </button>
@@ -325,12 +325,42 @@
         }
         
         // 更新模态框中显示的选中数量
-        document.getElementById('batch-edit-count').textContent = selected.length;
+        const countElement = document.getElementById('batch-edit-count');
+        if (countElement) {
+            countElement.textContent = selected.length;
+        }
         
-        // 显示模态框 - 使用 Bootstrap API
+        // 显示模态框
         const modalElement = document.getElementById('batchEditModal');
-        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-        modal.show();
+        if (modalElement) {
+            modalElement.classList.add('show');
+            modalElement.style.display = 'block';
+            document.body.classList.add('modal-open');
+            
+            // 添加背景遮罩
+            let backdrop = document.querySelector('.modal-backdrop');
+            if (!backdrop) {
+                backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade show';
+                document.body.appendChild(backdrop);
+            }
+        }
+    }
+    
+    // 关闭模态框
+    function closeBatchEditModal() {
+        const modalElement = document.getElementById('batchEditModal');
+        if (modalElement) {
+            modalElement.classList.remove('show');
+            modalElement.style.display = 'none';
+            document.body.classList.remove('modal-open');
+            
+            // 移除背景遮罩
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.remove();
+            }
+        }
     }
     
     // 提交批量修改表单
