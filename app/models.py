@@ -82,8 +82,8 @@ class Room(db.Model):
         db.UniqueConstraint('building', 'room_number', name='uix_building_room'),
     )
     
-    # 关联
-    students = db.relationship('Student', backref='room', lazy='dynamic')
+    # 关联（明确指定使用 room_id 外键）
+    students = db.relationship('Student', backref='room', lazy='dynamic', foreign_keys='Student.room_id')
     
     @property
     def available_beds(self):
