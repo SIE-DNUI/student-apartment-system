@@ -316,7 +316,9 @@
         }
     }
     
-    // 批量修改信息
+    // 批量修改信息 - 使用单例模式避免重复创建Modal
+    let batchEditModalInstance = null;
+    
     function openBatchEditModal() {
         const selected = document.querySelectorAll('.student-checkbox:checked');
         if (selected.length === 0) {
@@ -327,9 +329,12 @@
         // 更新模态框中显示的选中数量
         document.getElementById('batch-edit-count').textContent = selected.length;
         
-        // 显示模态框
-        const modal = new bootstrap.Modal(document.getElementById('batchEditModal'));
-        modal.show();
+        // 获取或创建模态框实例
+        const modalElement = document.getElementById('batchEditModal');
+        if (!batchEditModalInstance) {
+            batchEditModalInstance = new bootstrap.Modal(modalElement);
+        }
+        batchEditModalInstance.show();
     }
     
     // 提交批量修改表单
