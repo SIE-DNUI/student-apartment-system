@@ -227,8 +227,10 @@ def delete(id):
             if room.current_occupancy < room.capacity:
                 room.status = 'available'
     
-    # 归档学生信息
+    # 归档学生信息（保存房间ID用于成本统计）
     student.status = 'archived'
+    if student.room_id:
+        student.archived_room_id = student.room_id  # 保存房间ID用于归档后的成本统计
     student.room_id = None
     student.deleted_at = datetime.utcnow()
     student.retention_until = date.today() + timedelta(days=365*3)  # 保留3年
@@ -256,7 +258,9 @@ def checkout(id):
         if room.current_occupancy < room.capacity:
             room.status = 'available'
     
-    # 清空学生的房间信息并归档
+    # 清空学生的房间信息并归档（保存房间ID用于成本统计）
+    if student.room_id:
+        student.archived_room_id = student.room_id  # 保存房间ID用于归档后的成本统计
     student.room_id = None
     student.check_out_date = date.today()
     student.status = 'archived'
@@ -291,7 +295,8 @@ def batch_checkout():
                 if room.current_occupancy < room.capacity:
                     room.status = 'available'
             
-            # 清空学生的房间信息并归档
+            # 清空学生的房间信息并归档（保存房间ID用于成本统计）
+            student.archived_room_id = student.room_id  # 保存房间ID用于归档后的成本统计
             student.room_id = None
             student.check_out_date = date.today()
             student.status = 'archived'

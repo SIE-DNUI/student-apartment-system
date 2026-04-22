@@ -4,6 +4,7 @@
 """
 from datetime import datetime, date, timedelta
 from calendar import monthrange
+from sqlalchemy import or_
 import pytz
 from app.models import db, Student, FeeRecord, MonthlyRent
 
@@ -142,7 +143,9 @@ def calculate_room_usage_days(student, start_date, end_date):
     Returns:
         使用的天数
     """
-    if not student.room_id:
+    # 获取实际房间ID（优先使用 room_id，若为空则使用 archived_room_id）
+    actual_room_id = student.room_id or student.archived_room_id
+    if not actual_room_id:
         return 0
     
     # 获取学生的实际入住时间范围
@@ -173,25 +176,36 @@ def calculate_room_usage_days(student, start_date, end_date):
 def get_department_room_usage_days(department, start_date, end_date):
     """获取某部门在指定时间范围内的房间使用总天数
     
-    注意：双人间只计算一次占用天数，不重复计算
+    注意：
+    1. 双人间只计算一次占用天数，不重复计算
+    2. 归档学生也要统计在内，只要在时间范围内占用过房间
     """
+    # 查询所有学生（包括归档学生），只要在该时间范围内占用过房间
+    # 包含：当前入住学生(room_id不为空) 或 已归档学生(archived_room_id不为空)
     students = Student.query.filter(
         Student.department == department,
-        Student.room_id.isnot(None),
-        Student.status != 'archived'
+        or_(
+            Student.room_id.isnot(None),
+            Student.archived_room_id.isnot(None)
+        )
     ).all()
     
     total_days = 0
     processed_rooms = set()  # 用于追踪已处理的房间
     
     for student in students:
+        # 获取实际房间ID用于去重（优先 room_id，若为空则用 archived_room_id）
+        actual_room_id = student.room_id or student.archived_room_id
+        if not actual_room_id:
+            continue
+        
         # 检查房间是否已处理过
-        if student.room_id in processed_rooms:
+        if actual_room_id in processed_rooms:
             continue
         
         days = calculate_room_usage_days(student, start_date, end_date)
         total_days += days
-        processed_rooms.add(student.room_id)
+        processed_rooms.add(actual_room_id)
     
     return total_days
 
@@ -219,11 +233,13 @@ def get_department_rent_cost(department, total_rent, start_date, end_date):
 
 
 def get_department_payment(department, start_date, end_date):
-    """获取某部门的住宿费回款"""
-    # 找到该部门的所有学生
+    """获取某部门的住宿费回款
+    
+    注意：归档学生的缴费记录也要统计在内
+    """
+    # 找到该部门的所有学生（包括归档学生）
     students = Student.query.filter(
-        Student.department == department,
-        Student.status != 'archived'
+        Student.department == department
     ).all()
     
     student_ids = [s.id for s in students]
