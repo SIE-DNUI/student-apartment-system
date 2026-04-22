@@ -51,10 +51,19 @@ def index():
     query = Student.query.filter(Student.status != 'archived')
     
     if search:
+        # 搜索姓名、性别、国籍、房间号、所属业务部
+        # 房间号需要关联Room表搜索
+        from sqlalchemy import or_
+        query = query.outerjoin(Room, Student.room_id == Room.id)
         query = query.filter(
-            (Student.name.contains(search)) |
-            (Student.student_id.contains(search)) |
-            (Student.phone.contains(search))
+            or_(
+                Student.name.contains(search),
+                Student.gender.contains(search),
+                Student.nationality.contains(search),
+                Student.department.contains(search),
+                Room.room_number.contains(search),
+                Room.building.contains(search)  # 也支持搜索楼栋
+            )
         )
     
     # 按专业筛选
