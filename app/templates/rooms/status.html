@@ -74,8 +74,11 @@
                             </div>
                         </td>
                         <td>
+                            <a href="{{ url_for('rooms.building_overview', building=stat.building) }}" class="btn btn-sm btn-primary me-1">
+                                <i class="bi bi-grid-3x3-gap me-1"></i>入住一览
+                            </a>
                             <a href="{{ url_for('rooms.index', building=stat.building) }}" class="btn btn-sm btn-outline-primary">
-                                查看
+                                列表
                             </a>
                         </td>
                     </tr>

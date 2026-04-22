@@ -97,11 +97,25 @@ def add():
     """添加学生"""
     form = StudentForm()
     
+    # 预填的房间ID（从URL参数获取）
+    prefill_room_id = request.args.get('room_id', type=int)
+    
     available_rooms = Room.query.filter(Room.current_occupancy < Room.capacity).all()
     form.room_id.choices = [(0, '未分配')] + [(r.id, f'{r.building}-{r.room_number}') for r in available_rooms]
     
     fee_standards = FeeStandard.query.filter_by(is_active=True).all()
     form.fee_standard_id.choices = [(0, '未选择')] + [(f.id, f'{f.name} ({f.price}/{f.unit})') for f in fee_standards]
+    
+    # 如果有预填的房间ID，设置默认值
+    if prefill_room_id:
+        room = Room.query.get(prefill_room_id)
+        if room:
+            # 将预填房间添加到可选列表中（即使已满）
+            existing_choice = [(r.id, f'{r.building}-{r.room_number}') for r in available_rooms]
+            if prefill_room_id not in [c[0] for c in existing_choice]:
+                # 房间已满但用户仍想添加入住（如调换房间场景）
+                form.room_id.choices = [(0, '未分配')] + [(r.id, f'{r.building}-{r.room_number}') for r in available_rooms] + [(room.id, f'{room.building}-{room.room_number} (已满)')]
+            form.room_id.data = prefill_room_id
     
     if form.validate_on_submit():
         student = Student()

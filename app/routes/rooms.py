@@ -411,3 +411,66 @@ def export_template():
         as_attachment=True,
         download_name='房间导入模板.xlsx'
     )
+
+@bp.route('/building/<building>/overview')
+@login_required
+def building_overview(building):
+    """楼栋房间入住情况一览表"""
+    # 获取该楼栋所有房间
+    rooms = Room.query.filter_by(building=building).order_by(Room.floor, Room.room_number).all()
+    
+    if not rooms:
+        flash(f'楼栋 {building} 不存在或暂无房间', 'warning')
+        return redirect(url_for('rooms.index'))
+    
+    # 按楼层分组组织数据
+    floors_data = {}
+    for room in rooms:
+        floor = room.floor or 0
+        if floor not in floors_data:
+            floors_data[floor] = []
+        
+        # 获取该房间的有效入住学生
+        active_students = Student.query.filter_by(
+            room_id=room.id,
+            status='active'
+        ).all()
+        
+        # 计算空床位
+        total_beds = room.capacity
+        occupied_beds = sum(s.bed_occupancy for s in active_students)
+        empty_beds = total_beds - occupied_beds
+        
+        # 判断房型：单人间(capacity=1)或学生占用2个床位，双人间反之
+        room_type = '单' if room.capacity == 1 else '双'
+        
+        floors_data[floor].append({
+            'room': room,
+            'students': active_students,
+            'empty_beds': empty_beds,
+            'room_type': room_type,
+            'is_empty': len(active_students) == 0,
+            'has_partial': len(active_students) > 0 and empty_beds > 0
+        })
+    
+    # 获取所有楼栋列表（用于切换）
+    buildings = db.session.query(Room.building).distinct().order_by(Room.building).all()
+    buildings = [b[0] for b in buildings]
+    
+    # 计算统计信息
+    total_rooms = len(rooms)
+    empty_rooms = sum(1 for f_data in floors_data.values() for r in f_data if r['is_empty'])
+    partial_rooms = sum(1 for f_data in floors_data.values() for r in f_data if r['has_partial'])
+    full_rooms = total_rooms - empty_rooms - partial_rooms
+    
+    return render_template('rooms/building_overview.html',
+                         title=f'{building}号楼房间一览',
+                         building=building,
+                         floors_data=floors_data,
+                         buildings=buildings,
+                         stats={
+                             'total': total_rooms,
+                             'empty': empty_rooms,
+                             'partial': partial_rooms,
+                             'full': full_rooms
+                         })
