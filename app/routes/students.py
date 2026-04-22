@@ -917,7 +917,7 @@ def export():
     # 表头
     headers = ['专业', '姓名', '性别', '国籍', '楼栋', '房间号', '房型', 
                '入住日期', '预计离开日期', '居留许可有效期', '所属业务部', 
-               '学号', '护照号码', '联系电话', '欠费状态']
+               '学号', '联系电话', '欠费状态']
     
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
@@ -954,7 +954,6 @@ def export():
             student.residence_permit_expiry.strftime('%Y-%m-%d') if student.residence_permit_expiry else '',
             student.department or '',
             student.student_id or '',
-            student.passport or '',
             student.phone or '',
             arrears_status
         ]
@@ -964,11 +963,11 @@ def export():
             cell.alignment = Alignment(vertical='center')
             cell.border = thin_border
             # 欠费行高亮
-            if col_idx == 15 and has_arrears:
+            if col_idx == 14 and has_arrears:
                 cell.fill = PatternFill(start_color='FFE6E6', end_color='FFE6E6', fill_type='solid')
     
     # 设置列宽
-    column_widths = [20, 12, 8, 12, 10, 10, 10, 14, 14, 16, 15, 15, 15, 15, 12]
+    column_widths = [20, 12, 8, 12, 10, 10, 10, 14, 14, 16, 15, 15, 15, 12]
     for col, width in enumerate(column_widths, 1):
         ws.column_dimensions[chr(64 + col)].width = width
     
@@ -1027,7 +1026,7 @@ def export_archived():
     
     # 表头
     headers = ['姓名', '性别', '国籍', '所属业务部', '专业', '学号', 
-               '护照号码', '联系电话', '删除时间', '保留截止', '状态']
+               '联系电话', '删除时间', '保留截止', '状态']
     
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
@@ -1053,7 +1052,6 @@ def export_archived():
             student.department or '',
             student.major or '',
             student.student_id or '',
-            student.passport or '',
             student.phone or '',
             student.deleted_at.strftime('%Y-%m-%d %H:%M') if student.deleted_at else '',
             student.retention_until.strftime('%Y-%m-%d') if student.retention_until else '',
@@ -1065,11 +1063,11 @@ def export_archived():
             cell.alignment = Alignment(vertical='center')
             cell.border = thin_border
             # 过期行高亮
-            if col_idx == 11 and student.retention_until and student.retention_until < date.today():
+            if col_idx == 10 and student.retention_until and student.retention_until < date.today():
                 cell.fill = status_fill
     
     # 设置列宽
-    column_widths = [12, 8, 12, 15, 20, 15, 15, 15, 18, 14, 10]
+    column_widths = [12, 8, 12, 15, 20, 15, 15, 18, 14, 10]
     for col, width in enumerate(column_widths, 1):
         ws.column_dimensions[chr(64 + col)].width = width
     
