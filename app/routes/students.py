@@ -303,6 +303,59 @@ def batch_checkout():
     return redirect(url_for('students.index'))
 
 
+@bp.route('/batch-edit', methods=['POST'])
+@login_required
+@permission_required('write')
+def batch_edit():
+    """批量修改学生信息"""
+    student_ids = request.form.getlist('student_ids')
+    
+    if not student_ids:
+        flash('请选择要修改的学生', 'warning')
+        return redirect(url_for('students.index'))
+    
+    count = 0
+    for student_id in student_ids:
+        student = Student.query.get(int(student_id))
+        if student:
+            # 只修改填写了的字段
+            major = request.form.get('major', '').strip()
+            if major:
+                student.major = major
+            
+            department = request.form.get('department', '').strip()
+            if department:
+                student.department = department
+            
+            check_in_date = request.form.get('check_in_date', '').strip()
+            if check_in_date:
+                try:
+                    student.check_in_date = datetime.strptime(check_in_date, '%Y-%m-%d').date()
+                except:
+                    pass
+            
+            check_out_date = request.form.get('check_out_date', '').strip()
+            if check_out_date:
+                try:
+                    student.check_out_date = datetime.strptime(check_out_date, '%Y-%m-%d').date()
+                except:
+                    pass
+            
+            residence_permit_expiry = request.form.get('residence_permit_expiry', '').strip()
+            if residence_permit_expiry:
+                try:
+                    student.residence_permit_expiry = datetime.strptime(residence_permit_expiry, '%Y-%m-%d').date()
+                except:
+                    pass
+            
+            count += 1
+    
+    db.session.commit()
+    
+    flash(f'已成功修改 {count} 名学生的信息', 'success')
+    return redirect(url_for('students.index'))
+
+
 @bp.route('/detail/<int:id>', methods=['GET', 'POST'])
 @login_required
 def detail(id):

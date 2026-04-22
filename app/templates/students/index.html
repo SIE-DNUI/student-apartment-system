@@ -183,6 +183,9 @@
             
             {% if students %}
             <div class="mt-3">
+                <button type="button" id="batch-edit-btn" class="btn btn-info" onclick="openBatchEditModal()">
+                    <i class="bi bi-pencil-square me-1"></i> 批量修改信息
+                </button>
                 <button type="button" id="batch-checkout-btn" class="btn btn-warning" onclick="batchCheckout()">
                     <i class="bi bi-box-arrow-right me-1"></i> 批量退房
                 </button>
@@ -253,5 +256,115 @@
             document.getElementById('batch-checkout-form').submit();
         }
     }
+    
+    // 批量修改信息
+    function openBatchEditModal() {
+        const selected = document.querySelectorAll('.student-checkbox:checked');
+        if (selected.length === 0) {
+            alert('请选择要修改的学生');
+            return;
+        }
+        
+        // 更新模态框中显示的选中数量
+        document.getElementById('batch-edit-count').textContent = selected.length;
+        
+        // 显示模态框
+        const modal = new bootstrap.Modal(document.getElementById('batchEditModal'));
+        modal.show();
+    }
+    
+    // 提交批量修改表单
+    function submitBatchEdit() {
+        const selected = document.querySelectorAll('.student-checkbox:checked');
+        if (selected.length === 0) {
+            alert('请选择要修改的学生');
+            return;
+        }
+        
+        // 检查是否至少填写了一项
+        const major = document.getElementById('batch_major').value;
+        const checkInDate = document.getElementById('batch_check_in_date').value;
+        const checkOutDate = document.getElementById('batch_check_out_date').value;
+        const residencePermit = document.getElementById('batch_residence_permit_expiry').value;
+        const department = document.getElementById('batch_department').value;
+        
+        if (!major && !checkInDate && !checkOutDate && !residencePermit && !department) {
+            alert('请至少填写一项要修改的信息');
+            return;
+        }
+        
+        if (confirm('确定要修改选中的 ' + selected.length + ' 名学生的信息吗？')) {
+            // 将选中的学生ID添加到表单中
+            const selectedIdsContainer = document.getElementById('selected-student-ids');
+            selectedIdsContainer.innerHTML = '';
+            selected.forEach(function(cb) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'student_ids';
+                input.value = cb.value;
+                selectedIdsContainer.appendChild(input);
+            });
+            document.getElementById('batch-edit-form').submit();
+        }
+    }
 </script>
+
+<!-- 批量修改信息模态框 -->
+<div class="modal fade" id="batchEditModal" tabindex="-1" aria-labelledby="batchEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="batchEditModalLabel">
+                    <i class="bi bi-pencil-square me-2"></i>批量修改学生信息
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <form method="POST" action="{{ url_for('students.batch_edit') }}" id="batch-edit-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div id="selected-student-ids"></div>
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        将修改选中的 <strong><span id="batch-edit-count">0</span></strong> 名学生的信息
+                    </div>
+                    <div class="alert alert-warning mb-3">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong>注意：</strong>只修改填写了的字段，未填写的字段将保持原值不变
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="batch_major" class="form-label">专业</label>
+                        <input type="text" class="form-control" id="batch_major" name="major" placeholder="留空则不修改">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="batch_department" class="form-label">所属业务部</label>
+                        <input type="text" class="form-control" id="batch_department" name="department" placeholder="留空则不修改">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="batch_check_in_date" class="form-label">入住日期</label>
+                        <input type="date" class="form-control" id="batch_check_in_date" name="check_in_date" placeholder="留空则不修改">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="batch_check_out_date" class="form-label">预计离开日期</label>
+                        <input type="date" class="form-control" id="batch_check_out_date" name="check_out_date" placeholder="留空则不修改">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="batch_residence_permit_expiry" class="form-label">居留许可有效期</label>
+                        <input type="date" class="form-control" id="batch_residence_permit_expiry" name="residence_permit_expiry" placeholder="留空则不修改">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="submitBatchEdit()">
+                        <i class="bi bi-check-lg me-1"></i>确认修改
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
