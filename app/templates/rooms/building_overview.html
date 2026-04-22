@@ -1,174 +1,141 @@
 {% extends "base.html" %}
 
-{% block title %}{{ building }}号楼房间入住一览{% endblock %}
+{% block title %}{{ building }}房间入住一览{% endblock %}
 
 {% block content %}
+<style>
+    .overview-table { font-size: 0.75rem; }
+    .overview-table th, .overview-table td { padding: 0.25rem 0.3rem; vertical-align: middle; }
+    .room-cell { min-width: 65px; max-width: 75px; }
+    .room-cell.empty { background-color: #f8f9fa; }
+    .room-cell.partial { background-color: #fff3cd; }
+    .room-cell.full { background-color: #d1e7dd; }
+    .room-num { font-weight: bold; font-size: 0.8rem; }
+    .room-type { font-size: 0.65rem; }
+    .occupant { font-size: 0.7rem; line-height: 1.2; }
+    .stat-cell { background-color: #e7f1ff; font-weight: bold; }
+    .stat-header { background-color: #0d6efd; color: white; }
+</style>
+
 <div class="card">
-    <div class="card-header bg-primary text-white">
+    <div class="card-header bg-primary text-white py-2">
         <div class="d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">
-                <i class="bi bi-building me-2"></i>{{ building }}号楼房间入住时点情况
-            </h4>
-            <div>
-                <!-- 楼栋切换下拉菜单 -->
-                <div class="btn-group me-2">
-                    <button type="button" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown">
-                        <i class="bi bi-building me-1"></i>切换楼栋：{{ building }}号楼
+            <div class="d-flex align-items-center">
+                <h4 class="mb-0 me-3">{{ building }}房间入住时点情况</h4>
+                <!-- 楼栋切换 -->
+                <div class="btn-group">
+                    <button type="button" class="btn btn-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                        切换楼栋
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
+                    <ul class="dropdown-menu">
                         {% for b in buildings %}
                         <li>
                             <a class="dropdown-item {% if b == building %}active{% endif %}" 
                                href="{{ url_for('rooms.building_overview', building=b) }}">
-                                {{ b }}号楼
+                                {{ b }}
                             </a>
                         </li>
                         {% endfor %}
                     </ul>
                 </div>
             </div>
+            <div>
+                <span class="badge bg-light text-dark me-2">总房间: {{ stats.total }}</span>
+                <span class="badge bg-success me-2">已满: {{ stats.full }}</span>
+                <span class="badge bg-warning text-dark me-2">有空床位: {{ stats.partial }}</span>
+                <span class="badge bg-secondary me-2">空房: {{ stats.empty }}</span>
+                <span class="badge bg-info">可用床位: {{ stats.empty_beds }}</span>
+            </div>
         </div>
     </div>
     
     <div class="card-body p-2">
-        <!-- 统计概览 -->
-        <div class="row g-2 mb-3">
-            <div class="col">
-                <div class="text-center p-2 bg-primary bg-opacity-10 rounded">
-                    <h4 class="text-primary mb-0">{{ stats.total }}</h4>
-                    <small class="text-muted">总房间</small>
-                </div>
-            </div>
-            <div class="col">
-                <div class="text-center p-2 bg-success bg-opacity-10 rounded">
-                    <h4 class="text-success mb-0">{{ stats.full }}</h4>
-                    <small class="text-muted">已满</small>
-                </div>
-            </div>
-            <div class="col">
-                <div class="text-center p-2 bg-warning bg-opacity-10 rounded">
-                    <h4 class="text-warning mb-0">{{ stats.partial }}</h4>
-                    <small class="text-muted">有空床位</small>
-                </div>
-            </div>
-            <div class="col">
-                <div class="text-center p-2 bg-secondary bg-opacity-10 rounded">
-                    <h4 class="text-secondary mb-0">{{ stats.empty }}</h4>
-                    <small class="text-muted">空房间</small>
-                </div>
-            </div>
-            <div class="col">
-                <div class="text-center p-2 bg-info bg-opacity-10 rounded">
-                    <h4 class="text-info mb-0">{{ stats.empty_beds }}</h4>
-                    <small class="text-muted">可用床位</small>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 大表：按楼层从高到低展示 -->
-        <div class="table-responsive">
-            <table class="table table-bordered table-sm mb-0" style="font-size: 0.85rem;">
-                <thead class="table-dark">
+        {% if floors_data %}
+        <!-- 一屏展示的大表 -->
+        <div class="table-responsive" style="max-height: calc(100vh - 200px);">
+            <table class="table table-bordered overview-table mb-0">
+                <thead>
                     <tr class="text-center">
-                        <th colspan="21" class="py-2">
-                            <h5 class="mb-0">{{ building }}号楼房间入住情况一览表</h5>
-                        </th>
-                        <th colspan="3" class="py-2">楼层统计</th>
-                    </tr>
-                    <tr class="text-center table-secondary">
-                        <th colspan="20">房间信息（点击房间号或入住人姓名可操作）</th>
-                        <th width="50">房间数</th>
-                        <th width="50">剩余房</th>
-                        <th width="50">可用床位</th>
+                        <th class="stat-header" style="width: 45px;">楼层</th>
+                        {% for i in range(1, 21) %}
+                        <th class="room-cell">{{ i }}</th>
+                        {% endfor %}
+                        <th class="stat-header" style="width: 50px;">房间数</th>
+                        <th class="stat-header" style="width: 50px;">剩余房</th>
+                        <th class="stat-header" style="width: 50px;">空床位</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for floor in floors_sorted %}
                     <tr>
                         <!-- 楼层标签 -->
-                        <td class="table-primary text-center align-middle fw-bold" style="width: 40px;">
-                            {{ floor }}F
-                        </td>
+                        <td class="text-center table-primary align-middle fw-bold">{{ floor }}F</td>
                         
-                        <!-- 房间格子：每层最多20个房间 -->
+                        <!-- 房间格子 -->
                         {% set floor_rooms = floors_data[floor] %}
                         {% for i in range(20) %}
                             {% set item = floor_rooms[i] if i < floor_rooms|length else none %}
                             {% if item %}
-                                <!-- 判断房间状态背景色 -->
                                 {% if item.is_empty %}
-                                    {% set cell_class = 'bg-secondary bg-opacity-10' %}
+                                    {% set cell_class = 'empty' %}
                                 {% elif item.has_partial %}
-                                    {% set cell_class = 'bg-warning bg-opacity-25' %}
+                                    {% set cell_class = 'partial' %}
                                 {% else %}
-                                    {% set cell_class = 'bg-success bg-opacity-10' %}
+                                    {% set cell_class = 'full' %}
                                 {% endif %}
                                 
-                                <td class="{{ cell_class }} p-1 align-top" style="min-width: 80px;">
-                                    <!-- 房间号 -->
-                                    <div class="text-center mb-1">
-                                        {% if item.is_empty or item.has_partial %}
-                                        <a href="{{ url_for('students.add') }}?room_id={{ item.room.id }}&building={{ building }}" 
-                                           class="fw-bold text-decoration-none text-dark"
-                                           title="点击添加入住">
-                                            {{ item.room.room_number }}
-                                        </a>
-                                        {% else %}
-                                        <a href="{{ url_for('rooms.detail', room_id=item.room.id) }}" 
-                                           class="fw-bold text-decoration-none text-dark"
-                                           title="点击查看详情">
-                                            {{ item.room.room_number }}
-                                        </a>
-                                        {% endif %}
-                                        <span class="badge {% if item.room_type == '单' %}bg-info{% else %}bg-secondary{% endif %} ms-1" style="font-size: 0.7rem;">
+                                <td class="room-cell {{ cell_class }} text-center">
+                                    <!-- 房间号：可点击 -->
+                                    {% if item.is_empty or item.has_partial %}
+                                    <a href="{{ url_for('students.add') }}?room_id={{ item.room.id }}" 
+                                       class="room-num text-decoration-none" title="添加入住">
+                                        {{ item.room.room_number }}
+                                    </a>
+                                    {% else %}
+                                    <a href="{{ url_for('rooms.detail', room_id=item.room.id) }}" 
+                                       class="room-num text-decoration-none" title="查看详情">
+                                        {{ item.room.room_number }}
+                                    </a>
+                                    {% endif %}
+                                    
+                                    <!-- 房型 -->
+                                    <div class="room-type">
+                                        <span class="badge {% if item.room_type == '单' %}bg-info{% else %}bg-secondary{% endif %}">
                                             {{ item.room_type }}
                                         </span>
                                     </div>
-                                    <!-- 入住人 -->
-                                    <div style="font-size: 0.75rem;">
+                                    
+                                    <!-- 入住人：可点击编辑 -->
+                                    <div class="occupant">
                                         {% if item.students %}
                                             {% for student in item.students %}
                                             <a href="{{ url_for('students.edit', id=student.id) }}" 
                                                class="text-decoration-none d-block"
-                                               title="点击编辑 {{ student.name }}">
+                                               title="编辑{{ student.name }}">
                                                 {{ student.name }}
                                             </a>
                                             {% endfor %}
                                         {% else %}
-                                            <span class="text-muted">空房</span>
+                                            <span class="text-muted">空</span>
                                         {% endif %}
                                     </div>
                                 </td>
                             {% else %}
-                                <!-- 空白格子 -->
-                                <td class="bg-light text-center text-muted" style="min-width: 80px;">-</td>
+                                <td class="room-cell bg-light text-muted text-center">-</td>
                             {% endif %}
                         {% endfor %}
                         
                         <!-- 楼层统计 -->
-                        <td class="text-center align-middle table-info fw-bold">
-                            {{ floor_stats[floor].total }}
-                        </td>
-                        <td class="text-center align-middle table-warning fw-bold">
-                            {{ floor_stats[floor].empty_rooms }}
-                        </td>
-                        <td class="text-center align-middle table-success fw-bold">
-                            {{ floor_stats[floor].empty_beds }}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="23" class="text-center text-muted py-4">
-                            <i class="bi bi-inbox display-4 d-block mb-2"></i>
-                            暂无房间数据
-                        </td>
+                        <td class="stat-cell text-center align-middle">{{ floor_stats[floor].total }}</td>
+                        <td class="stat-cell text-center align-middle bg-warning bg-opacity-25">{{ floor_stats[floor].empty_rooms }}</td>
+                        <td class="stat-cell text-center align-middle bg-success bg-opacity-25">{{ floor_stats[floor].empty_beds }}</td>
                     </tr>
                     {% endfor %}
                     
                     <!-- 总计行 -->
                     <tr class="table-dark text-center fw-bold">
-                        <td>总计</td>
-                        <td colspan="19"></td>
+                        <td>合计</td>
+                        <td colspan="20"></td>
                         <td class="table-info">{{ stats.total }}</td>
                         <td class="table-warning">{{ stats.empty }}</td>
                         <td class="table-success">{{ stats.empty_beds }}</td>
@@ -178,23 +145,26 @@
         </div>
         
         <!-- 图例 -->
-        <div class="mt-3 p-2 bg-light rounded">
-            <div class="row">
-                <div class="col">
-                    <span class="badge bg-secondary me-1">空房间</span>
-                    <span class="badge bg-warning me-1">有空床位</span>
-                    <span class="badge bg-success me-1">已满</span>
-                    <span class="badge bg-info me-1">单人间</span>
-                    <span class="badge bg-secondary me-1">双人间</span>
-                </div>
-                <div class="col-auto">
-                    <small class="text-muted">
-                        <i class="bi bi-info-circle me-1"></i>
-                        点击房间号可快速操作 | 点击入住人姓名可编辑信息
-                    </small>
-                </div>
+        <div class="mt-2 p-2 bg-light rounded d-flex justify-content-between align-items-center">
+            <div>
+                <span class="badge bg-secondary me-1">空房间</span>
+                <span class="badge bg-warning text-dark me-1">有空床位</span>
+                <span class="badge bg-success me-1">已满</span>
+                <span class="badge bg-info me-1">单人间</span>
+                <span class="badge bg-secondary me-1">双人间</span>
             </div>
+            <small class="text-muted">
+                点击房间号操作 | 点击姓名编辑
+            </small>
         </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox display-4"></i>
+            <p class="mt-2">该楼栋暂无房间数据</p>
+            <p>当前楼栋: {{ building }}</p>
+            <p>可用楼栋: {{ buildings|join(', ') }}</p>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

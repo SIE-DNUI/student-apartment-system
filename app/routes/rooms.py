@@ -412,6 +412,19 @@ def export_template():
         download_name='房间导入模板.xlsx'
     )
 
+@bp.route('/overview')
+@login_required
+def overview():
+    """楼栋房间入住一览表 - 自动跳转到第一个楼栋"""
+    # 获取第一个楼栋
+    first_building = db.session.query(Room.building).distinct().order_by(Room.building).first()
+    if first_building:
+        return redirect(url_for('rooms.building_overview', building=first_building[0]))
+    else:
+        flash('暂无楼栋数据', 'warning')
+        return redirect(url_for('rooms.index'))
+
+
 @bp.route('/building/<building>/overview')
 @login_required
 def building_overview(building):
