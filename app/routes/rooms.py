@@ -462,6 +462,19 @@ def building_overview(building):
     empty_rooms = sum(1 for f_data in floors_data.values() for r in f_data if r['is_empty'])
     partial_rooms = sum(1 for f_data in floors_data.values() for r in f_data if r['has_partial'])
     full_rooms = total_rooms - empty_rooms - partial_rooms
+    total_empty_beds = sum(r['empty_beds'] for f_data in floors_data.values() for r in f_data)
+    
+    # 计算每楼层统计
+    floor_stats = {}
+    for floor, f_data in floors_data.items():
+        floor_total = len(f_data)
+        floor_empty = sum(1 for r in f_data if r['is_empty'])
+        floor_empty_beds = sum(r['empty_beds'] for r in f_data)
+        floor_stats[floor] = {
+            'total': floor_total,
+            'empty_rooms': floor_empty,
+            'empty_beds': floor_empty_beds
+        }
     
     # 楼层从高到低排序
     floors_sorted = sorted(floors_data.keys(), reverse=True)
@@ -471,10 +484,12 @@ def building_overview(building):
                          building=building,
                          floors_data=floors_data,
                          floors_sorted=floors_sorted,
+                         floor_stats=floor_stats,
                          buildings=buildings,
                          stats={
                              'total': total_rooms,
                              'empty': empty_rooms,
                              'partial': partial_rooms,
-                             'full': full_rooms
+                             'full': full_rooms,
+                             'empty_beds': total_empty_beds
                          })

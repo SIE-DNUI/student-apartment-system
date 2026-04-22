@@ -146,6 +146,27 @@
     </div>
 </div>
 
+<!-- 房间入住一览入口 -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <a href="{{ url_for('rooms.building_overview', building='19') }}" class="text-decoration-none">
+            <div class="card bg-primary text-white hover-shadow" style="transition: transform 0.2s;">
+                <div class="card-body py-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-2"><i class="bi bi-grid-3x3-gap me-2"></i>楼栋房间入住一览表</h4>
+                            <p class="mb-0 opacity-75">点击查看各楼栋房间入住情况、空房间、空床位等详细信息</p>
+                        </div>
+                        <div class="text-end">
+                            <i class="bi bi-chevron-right fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
 <!-- 居留许可统计卡片 -->
 <div class="row g-4 mb-4">
     <div class="col-md-6">
