@@ -230,8 +230,8 @@ def get_department_room_usage_days(department, start_date, end_date):
         # 合并重叠的时间段
         merged = []
         for start, end in periods:
-            if merged and start <= merged[-1][1] + timedelta(days=1):
-                # 与前一个时间段重叠或连续，合并
+            if merged and start <= merged[-1][1]:
+                # 只合并真正重叠的时间段
                 merged[-1] = (merged[-1][0], max(merged[-1][1], end))
             else:
                 merged.append((start, end))
