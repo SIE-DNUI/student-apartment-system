@@ -156,11 +156,13 @@ def calculate_room_usage_days(student, start_date, end_date):
         actual_start = start_date
     
     # 离开日期不能晚于结束日期
-    # 优先使用实际退房日期(deleted_at或status为checked_out时的deleted_at日期)
-    # 否则使用预计离开日期(check_out_date)
-    if student.status == 'checked_out' and student.deleted_at:
-        actual_end = student.deleted_at.date()
+    # 对于归档学生或已退房学生，使用 deleted_at 作为实际退房日期
+    # 否则使用预计离开日期(check_out_date)，如果没有则使用结束日期
+    if student.status in ('checked_out', 'archived') and student.deleted_at:
+        # 归档或退房学生：使用实际退房日期
+        actual_end = min(end_date, student.deleted_at.date())
     elif student.check_out_date:
+        # 在住学生：使用预计离开日期
         actual_end = min(end_date, student.check_out_date)
     else:
         actual_end = end_date
@@ -177,11 +179,11 @@ def get_department_room_usage_days(department, start_date, end_date):
     """获取某部门在指定时间范围内的房间使用总天数
     
     注意：
-    1. 双人间只计算一次占用天数，不重复计算
-    2. 归档学生也要统计在内，只要在时间范围内占用过房间
+    1. 双人间同一时间段只计算一次，不重复计算
+    2. 同一房间不同时间段的占用应该累加
+    3. 归档学生也要统计在内，只要在时间范围内占用过房间
     """
     # 查询所有学生（包括归档学生），只要在该时间范围内占用过房间
-    # 包含：当前入住学生(room_id不为空) 或 已归档学生(archived_room_id不为空)
     students = Student.query.filter(
         Student.department == department,
         or_(
@@ -190,22 +192,53 @@ def get_department_room_usage_days(department, start_date, end_date):
         )
     ).all()
     
-    total_days = 0
-    processed_rooms = set()  # 用于追踪已处理的房间
+    # 按房间分组，收集每个房间的所有入住时间段
+    room_periods = {}  # {room_id: [(start, end), ...]}
     
     for student in students:
-        # 获取实际房间ID用于去重（优先 room_id，若为空则用 archived_room_id）
+        # 获取实际房间ID
         actual_room_id = student.room_id or student.archived_room_id
         if not actual_room_id:
             continue
         
-        # 检查房间是否已处理过
-        if actual_room_id in processed_rooms:
-            continue
+        # 计算该学生的入住时间段
+        if student.check_in_date:
+            period_start = max(start_date, student.check_in_date)
+        else:
+            period_start = start_date
         
-        days = calculate_room_usage_days(student, start_date, end_date)
-        total_days += days
-        processed_rooms.add(actual_room_id)
+        # 确定结束日期
+        if student.status in ('checked_out', 'archived') and student.deleted_at:
+            period_end = min(end_date, student.deleted_at.date())
+        elif student.check_out_date:
+            period_end = min(end_date, student.check_out_date)
+        else:
+            period_end = end_date
+        
+        # 如果时间段有效，添加到对应房间
+        if period_start <= period_end:
+            if actual_room_id not in room_periods:
+                room_periods[actual_room_id] = []
+            room_periods[actual_room_id].append((period_start, period_end))
+    
+    # 计算每个房间的总占用天数（合并重叠时间段）
+    total_days = 0
+    for room_id, periods in room_periods.items():
+        # 按开始日期排序
+        periods.sort(key=lambda x: x[0])
+        
+        # 合并重叠的时间段
+        merged = []
+        for start, end in periods:
+            if merged and start <= merged[-1][1] + timedelta(days=1):
+                # 与前一个时间段重叠或连续，合并
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+            else:
+                merged.append((start, end))
+        
+        # 计算合并后的总天数
+        for start, end in merged:
+            total_days += (end - start).days + 1
     
     return total_days
 
