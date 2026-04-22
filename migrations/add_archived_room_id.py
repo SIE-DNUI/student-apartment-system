@@ -49,20 +49,8 @@ def upgrade():
         '''))
         db.session.commit()
         print("字段 archived_room_id 添加成功。")
-        
-        # 提示关于已归档学生的处理
-        archived_students = Student.query.filter(
-            Student.status == 'archived',
-            Student.room_id.is_(None),
-            Student.archived_room_id.is_(None)
-        ).count()
-        
-        if archived_students > 0:
-            print(f"\n注意：有 {archived_students} 名已归档学生的 room_id 为空，")
-            print("这些学生无法通过此迁移自动恢复房间信息。")
-            print("如需统计这些学生的历史成本，请手动设置其 archived_room_id。")
-        
         print("\n迁移完成！")
+        print("注意：已归档学生的历史房间信息无法自动恢复，需要手动设置 archived_room_id。")
 
 
 def downgrade():
