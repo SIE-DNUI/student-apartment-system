@@ -29,7 +29,7 @@
                     <tr>
                         <th>姓名</th>
                         <th>国籍</th>
-                        <th>护照号</th>
+                        <th>所属业务部</th>
                         <th>专业</th>
                         <th>删除时间</th>
                         <th>保留截止</th>
@@ -41,7 +41,7 @@
                     <tr>
                         <td>{{ student.name }}</td>
                         <td>{{ student.nationality or '-' }}</td>
-                        <td>{{ student.passport_number or '-' }}</td>
+                        <td>{{ student.department or '-' }}</td>
                         <td>{{ student.major or '-' }}</td>
                         <td>{{ student.deleted_at.strftime('%Y-%m-%d %H:%M') if student.deleted_at else '-' }}</td>
                         <td>{{ student.retention_until or '-' }}</td>

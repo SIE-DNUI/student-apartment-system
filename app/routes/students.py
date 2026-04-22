@@ -23,7 +23,7 @@ class StudentForm(FlaskForm):
     name = StringField('姓名', validators=[DataRequired(message='请输入姓名')])
     gender = SelectField('性别', choices=[('男', '男'), ('女', '女'), ('其他', '其他')], validators=[Optional()])
     nationality = StringField('国籍', validators=[Optional()])
-    passport_number = StringField('护照号码', validators=[Optional()])
+    department = StringField('所属业务部', validators=[Optional()])
     major = StringField('专业', validators=[Optional()])
     room_id = SelectField('分配房间', coerce=int, validators=[Optional()])
     check_in_date = DateField('入住日期', format='%Y-%m-%d', validators=[Optional()])
@@ -405,7 +405,7 @@ def batch_import():
                     student.name = str(row_data.get('姓名', '')).strip()
                     student.gender = str(row_data.get('性别', '')).strip() if row_data.get('性别') else None
                     student.nationality = str(row_data.get('国籍', '')).strip() if row_data.get('国籍') else None
-                    student.passport_number = str(row_data.get('护照号码', '')).strip() if row_data.get('护照号码') else None
+                    student.department = str(row_data.get('所属业务部', '')).strip() if row_data.get('所属业务部') else None
                     student.major = str(row_data.get('专业', '')).strip() if row_data.get('专业') else None
                     
                     # 房间类型处理
@@ -608,7 +608,7 @@ def export_template():
         'A': 12,  # 姓名
         'B': 8,   # 性别
         'C': 12,  # 国籍
-        'D': 15,  # 护照号码
+        'D': 15,  # 所属业务部
         'E': 18,  # 专业
         'F': 10,  # 楼栋号
         'G': 10,  # 房间号
@@ -789,7 +789,7 @@ def archived():
         query = query.filter(
             (Student.name.contains(search)) |
             (Student.student_id.contains(search)) |
-            (Student.passport_number.contains(search))
+            (Student.department.contains(search))
         )
     
     pagination = query.order_by(Student.deleted_at.desc()).paginate(

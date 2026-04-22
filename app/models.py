@@ -115,7 +115,7 @@ class Student(db.Model):
     name = db.Column(db.String(100), nullable=False, index=True)  # 姓名
     gender = db.Column(db.String(10))  # 性别
     nationality = db.Column(db.String(50))  # 国籍
-    passport_number = db.Column(db.String(50))  # 护照号
+    department = db.Column(db.String(50))  # 所属业务部
     phone = db.Column(db.String(20))
     email = db.Column(db.String(120))
     id_card = db.Column(db.String(50))  # 身份证号
