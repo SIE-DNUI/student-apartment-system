@@ -7,6 +7,11 @@
     <div class="card-header">
         <h5 class="mb-0"><i class="bi bi-archive me-2"></i>归档学生列表</h5>
         <small class="text-muted">已删除的学生记录，保留3年后自动清除</small>
+        <div class="mt-2">
+            <a href="{{ url_for('students.export_archived', search=search) }}" class="btn btn-secondary btn-sm">
+                <i class="bi bi-download me-1"></i> 导出Excel
+            </a>
+        </div>
     </div>
     <div class="card-body">
         <!-- 搜索框 -->

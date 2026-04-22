@@ -12,6 +12,8 @@ from wtforms.widgets import TextArea
 from app.models import db
 from app.models import Student, Room, FeeStandard, FeeRecord, Alert
 from app.decorators import permission_required
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from datetime import datetime, date, timedelta
 import io
 
@@ -862,6 +864,229 @@ def archived():
                          students=students,
                          pagination=pagination,
                          search=search)
+
+
+@bp.route('/export')
+@login_required
+def export():
+    """导出当前学生列表（支持筛选条件）"""
+    search = request.args.get('search', '')
+    major = request.args.get('major', '')
+    filter_status = request.args.get('filter', 'all')
+    
+    # 构建查询（与 index 视图相同的筛选逻辑）
+    query = Student.query.filter(Student.status != 'archived')
+    
+    if search:
+        query = query.filter(
+            (Student.name.contains(search)) |
+            (Student.student_id.contains(search)) |
+            (Student.phone.contains(search))
+        )
+    
+    if major:
+        query = query.filter(Student.major.contains(major))
+    
+    if filter_status == 'housed':
+        query = query.filter(Student.room_id != None)
+    elif filter_status == 'unhoused':
+        query = query.filter(Student.room_id == None)
+    
+    students = query.order_by(Student.created_at.desc()).all()
+    
+    # 创建 Excel 工作簿
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '学生列表'
+    
+    # 设置样式
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF')
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # 表头
+    headers = ['专业', '姓名', '性别', '国籍', '楼栋', '房间号', '房型', 
+               '入住日期', '预计离开日期', '居留许可有效期', '所属业务部', 
+               '学号', '护照号码', '联系电话', '欠费状态']
+    
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+    
+    # 数据行
+    for row_idx, student in enumerate(students, 2):
+        # 房型
+        room_type = ''
+        if student.room_id:
+            room_type = '单人间' if student.bed_occupancy == 2 else '双人间'
+        
+        # 欠费状态
+        has_arrears = student.has_arrears()
+        arrears_status = f'欠费 ¥{student.calculate_arrears():.2f}' if has_arrears else '正常'
+        
+        # 房间信息
+        building = student.room.building if student.room else ''
+        room_number = student.room.room_number if student.room else ''
+        
+        row_data = [
+            student.major or '',
+            student.name or '',
+            student.gender or '',
+            student.nationality or '',
+            building,
+            room_number,
+            room_type,
+            student.check_in_date.strftime('%Y-%m-%d') if student.check_in_date else '',
+            student.check_out_date.strftime('%Y-%m-%d') if student.check_out_date else '',
+            student.residence_permit_expiry.strftime('%Y-%m-%d') if student.residence_permit_expiry else '',
+            student.department or '',
+            student.student_id or '',
+            student.passport or '',
+            student.phone or '',
+            arrears_status
+        ]
+        
+        for col_idx, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.alignment = Alignment(vertical='center')
+            cell.border = thin_border
+            # 欠费行高亮
+            if col_idx == 15 and has_arrears:
+                cell.fill = PatternFill(start_color='FFE6E6', end_color='FFE6E6', fill_type='solid')
+    
+    # 设置列宽
+    column_widths = [20, 12, 8, 12, 10, 10, 10, 14, 14, 16, 15, 15, 15, 15, 12]
+    for col, width in enumerate(column_widths, 1):
+        ws.column_dimensions[chr(64 + col)].width = width
+    
+    # 设置行高
+    ws.row_dimensions[1].height = 25
+    
+    # 生成文件名（包含日期时间）
+    now = datetime.now().strftime('%Y%m%d_%H%M%S')
+    download_name = f'学生列表_{now}.xlsx'
+    
+    # 保存到内存
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=download_name
+    )
+
+
+@bp.route('/archived/export')
+@login_required
+def export_archived():
+    """导出所有归档学生"""
+    search = request.args.get('search', '')
+    
+    # 查询已归档的学生
+    query = Student.query.filter(Student.status == 'archived')
+    
+    if search:
+        query = query.filter(
+            (Student.name.contains(search)) |
+            (Student.student_id.contains(search)) |
+            (Student.department.contains(search))
+        )
+    
+    students = query.order_by(Student.deleted_at.desc()).all()
+    
+    # 创建 Excel 工作簿
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '归档学生'
+    
+    # 设置样式
+    header_fill = PatternFill(start_color='6C757D', end_color='6C757D', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF')
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # 表头
+    headers = ['姓名', '性别', '国籍', '所属业务部', '专业', '学号', 
+               '护照号码', '联系电话', '删除时间', '保留截止', '状态']
+    
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+    
+    # 数据行
+    for row_idx, student in enumerate(students, 2):
+        # 状态
+        if student.retention_until and student.retention_until < date.today():
+            status = '已过期'
+            status_fill = PatternFill(start_color='FFE6E6', end_color='FFE6E6', fill_type='solid')
+        else:
+            status = '已归档'
+            status_fill = PatternFill(start_color='F8F9FA', end_color='F8F9FA', fill_type='solid')
+        
+        row_data = [
+            student.name or '',
+            student.gender or '',
+            student.nationality or '',
+            student.department or '',
+            student.major or '',
+            student.student_id or '',
+            student.passport or '',
+            student.phone or '',
+            student.deleted_at.strftime('%Y-%m-%d %H:%M') if student.deleted_at else '',
+            student.retention_until.strftime('%Y-%m-%d') if student.retention_until else '',
+            status
+        ]
+        
+        for col_idx, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.alignment = Alignment(vertical='center')
+            cell.border = thin_border
+            # 过期行高亮
+            if col_idx == 11 and student.retention_until and student.retention_until < date.today():
+                cell.fill = status_fill
+    
+    # 设置列宽
+    column_widths = [12, 8, 12, 15, 20, 15, 15, 15, 18, 14, 10]
+    for col, width in enumerate(column_widths, 1):
+        ws.column_dimensions[chr(64 + col)].width = width
+    
+    # 设置行高
+    ws.row_dimensions[1].height = 25
+    
+    # 生成文件名（包含日期时间）
+    now = datetime.now().strftime('%Y%m%d_%H%M%S')
+    download_name = f'归档学生_{now}.xlsx'
+    
+    # 保存到内存
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=download_name
+    )
+
 
 @bp.route('/arrears')
 @login_required
