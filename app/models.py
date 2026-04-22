@@ -328,3 +328,19 @@ class Alert(db.Model):
     
     def __repr__(self):
         return f'<Alert {self.alert_type}: {self.title}>'
+
+
+class MonthlyRent(db.Model):
+    """每月房租记录"""
+    __tablename__ = 'monthly_rents'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (db.UniqueConstraint('year', 'month', name='uix_year_month'),)
+    
+    def __repr__(self):
+        return f'<MonthlyRent {self.year}-{self.month:02d}: {self.amount}>'

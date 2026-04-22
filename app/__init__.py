@@ -60,7 +60,7 @@ def create_app(config_name=None):
         return dict(alerts_count=alerts_count, is_admin=is_admin, date=date)
     
     # 注册蓝图
-    from app.routes import auth, dashboard, students, rooms, fees, reservations, users
+    from app.routes import auth, dashboard, students, rooms, fees, reservations, users, cost
     app.register_blueprint(auth.bp)
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(students.bp)
@@ -68,5 +68,6 @@ def create_app(config_name=None):
     app.register_blueprint(fees.bp)
     app.register_blueprint(reservations.bp)
     app.register_blueprint(users.bp)
+    app.register_blueprint(cost.bp)
     
     return app

@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}成本与回款{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">成本与回款统计</h4>
+    <div>
+        <span class="text-muted me-3">
+            <i class="bi bi-calendar3 me-1"></i>
+            {% if time_info.is_december %}
+            统计截止：{{ time_info.current_year }}年12月31日
+            {% else %}
+            统计截止：{{ time_info.last_month_end.year }}年{{ time_info.last_month_end.month }}月{{ time_info.last_month_end.day }}日
+            {% endif %}
+        </span>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#rentModal">
+            <i class="bi bi-plus-circle me-1"></i>录入房租
+        </button>
+    </div>
+</div>
+
+<!-- 四个统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2">上月房租</h6>
+                        <h3 class="mb-0 text-primary">¥{{ "%.2f"|format(summary.last_month_rent) }}</h3>
+                    </div>
+                    <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                        <i class="bi bi-house"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2">截至上月末今年总房租</h6>
+                        <h3 class="mb-0 text-info">¥{{ "%.2f"|format(summary.year_total_rent) }}</h3>
+                    </div>
+                    <div class="stat-icon bg-info bg-opacity-10 text-info">
+                        <i class="bi bi-cash-stack"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2">上月住宿费回款</h6>
+                        <h3 class="mb-0 text-success">¥{{ "%.2f"|format(summary.last_month_payment) }}</h3>
+                    </div>
+                    <div class="stat-icon bg-success bg-opacity-10 text-success">
+                        <i class="bi bi-arrow-down-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2">截至上月末今年总回款</h6>
+                        <h3 class="mb-0 text-warning">¥{{ "%.2f"|format(summary.year_total_payment) }}</h3>
+                    </div>
+                    <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                        <i class="bi bi-wallet2"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 已录入房租列表 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-calendar-month me-2"></i>{{ time_info.current_year }}年房租录入情况</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for month in range(1, 13) %}
+            <div class="col-md-3 col-6 mb-3">
+                {% set month_rent = monthly_rents|selectattr('month', 'equalto', month)|first %}
+                <div class="border rounded p-2 text-center {% if month_rent %}bg-light{% endif %}">
+                    <small class="text-muted d-block">{{ month }}月</small>
+                    <span class="fw-bold {% if month_rent %}text-success{% else %}text-muted{% endif %}">
+                        {% if month_rent %}
+                        ¥{{ "%.2f"|format(month_rent.amount) }}
+                        {% else %}
+                        未录入
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- 部门盈利表格 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>部门盈利情况</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>所属业务部</th>
+                        <th class="text-end">截至上月末房间使用总天数</th>
+                        <th class="text-end">截至上月末分摊房租成本</th>
+                        <th class="text-end">截至上月末住宿费回款</th>
+                        <th class="text-end">截至上月末盈利情况</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in dept_stats %}
+                    <tr>
+                        <td class="fw-bold">{{ stat.department }}</td>
+                        <td class="text-end">{{ stat.room_days }} 天</td>
+                        <td class="text-end">¥{{ "%.2f"|format(stat.rent_cost) }}</td>
+                        <td class="text-end">¥{{ "%.2f"|format(stat.payment) }}</td>
+                        <td class="text-end {% if stat.profit < 0 %}text-danger fw-bold{% elif stat.profit > 0 %}text-success fw-bold{% endif %}">
+                            {% if stat.profit >= 0 %}
+                            ¥{{ "%.2f"|format(stat.profit) }}
+                            {% else %}
+                            -¥{{ "%.2f"|format(stat.profit|abs) }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td>合计</td>
+                        <td class="text-end">
+                            {% set total_days = dept_stats|sum(attribute='room_days') %}
+                            {{ total_days }} 天
+                        </td>
+                        <td class="text-end">
+                            {% set total_cost = dept_stats|sum(attribute='rent_cost') %}
+                            ¥{{ "%.2f"|format(total_cost) }}
+                        </td>
+                        <td class="text-end">
+                            {% set total_payment = dept_stats|sum(attribute='payment') %}
+                            ¥{{ "%.2f"|format(total_payment) }}
+                        </td>
+                        <td class="text-end {% if (total_payment - total_cost) < 0 %}text-danger fw-bold{% elif (total_payment - total_cost) > 0 %}text-success fw-bold{% endif %}">
+                            {% set total_profit = total_payment - total_cost %}
+                            {% if total_profit >= 0 %}
+                            ¥{{ "%.2f"|format(total_profit) }}
+                            {% else %}
+                            -¥{{ "%.2f"|format(total_profit|abs) }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 录入房租模态框 -->
+<div class="modal fade" id="rentModal" tabindex="-1" aria-labelledby="rentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rentModalLabel">
+                    <i class="bi bi-plus-circle me-2"></i>录入房租
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('cost.save_rent') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">年份</label>
+                        <select name="year" class="form-select" required>
+                            <option value="{{ time_info.current_year }}" selected>{{ time_info.current_year }}年</option>
+                            <option value="{{ time_info.current_year - 1 }}">{{ time_info.current_year - 1 }}年</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">月份</label>
+                        <select name="month" class="form-select" required>
+                            {% for m in range(1, 13) %}
+                            <option value="{{ m }}">{{ m }}月</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">房租金额 (元)</label>
+                        <input type="number" name="amount" class="form-control" 
+                               step="0.01" min="0" placeholder="请输入房租金额" required>
+                        <div class="form-text">请输入该月的房租成本金额</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-1"></i>保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    }
+    
+    .stat-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    
+    .table th {
+        font-weight: 600;
+        color: var(--secondary-color);
+        background: #f8f9fa;
+    }
+    
+    .table tfoot td {
+        border-top: 2px solid #dee2e6;
+    }
+</style>
+{% endblock %}

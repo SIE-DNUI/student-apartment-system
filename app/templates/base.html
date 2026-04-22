@@ -233,6 +233,9 @@
             <a href="{{ url_for('reservations.index') }}" class="nav-link {% if request.endpoint and request.endpoint in ['reservations.index', 'reservations.add', 'reservations.edit', 'reservations.batch_import'] %}active{% endif %}">
                 <i class="bi bi-calendar-event me-2"></i> 入住计划
             </a>
+            <a href="{{ url_for('cost.index') }}" class="nav-link {% if request.endpoint and 'cost' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-graph-up me-2"></i> 成本与回款
+            </a>
             
             {% if is_admin() %}
             <div class="nav-header">系统</div>
