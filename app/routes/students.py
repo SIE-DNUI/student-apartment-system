@@ -42,6 +42,7 @@ def index():
     per_page = 20
     
     search = request.args.get('search', '')
+    major = request.args.get('major', '')
     filter_status = request.args.get('filter', 'all')  # all, housed, unhoused
     
     # 排除已归档的学生
@@ -53,6 +54,10 @@ def index():
             (Student.student_id.contains(search)) |
             (Student.phone.contains(search))
         )
+    
+    # 按专业筛选
+    if major:
+        query = query.filter(Student.major.contains(major))
     
     # 按住宿状态筛选
     if filter_status == 'housed':
@@ -85,6 +90,7 @@ def index():
                          students=students,
                          pagination=pagination,
                          search=search,
+                         major=major,
                          filter_status=filter_status,
                          expiring_count=expiring_count,
                          arrears_count=arrears_count)
