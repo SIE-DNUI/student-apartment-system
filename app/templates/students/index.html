@@ -81,7 +81,7 @@
                             <th>入住日期</th>
                             <th>预计离开日期</th>
                             <th>居留许可</th>
-                            <th>状态</th>
+                            <th>所属业务部</th>
                             <th>操作</th>
                         </tr>
                     </thead>
@@ -145,29 +145,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if student.status == 'active' %}
-                                    {% if student.room_id %}
-                                    <span class="badge bg-success">在住</span>
-                                    {% else %}
-                                    <span class="badge bg-warning">待入住</span>
-                                    {% endif %}
-                                {% elif student.status == 'inactive' %}
-                                <span class="badge bg-secondary">离校</span>
-                                {% elif student.status == 'checked_out' %}
-                                <span class="badge bg-info">已退房</span>
-                                {% else %}
-                                <span class="badge bg-info">{{ student.status }}</span>
-                                {% endif %}
-                                
-                                {% if student.is_payment_overdue() %}
-                                <span class="badge bg-danger">欠费</span>
-                                {% endif %}
-                                
-                                {% if student.is_residence_permit_expired() %}
-                                <span class="badge bg-danger" title="居留许可已过期">许可过期</span>
-                                {% elif student.is_residence_permit_expiring() %}
-                                <span class="badge bg-warning" title="居留许可即将到期">许可到期</span>
-                                {% endif %}
+                                {{ student.department or '-' }}
                             </td>
                             <td>
                                 <a href="{{ url_for('students.detail', id=student.id) }}" class="btn btn-sm btn-outline-info" title="详情">
