@@ -20,6 +20,36 @@ import io
 bp = Blueprint('students', __name__, url_prefix='/students')
 
 
+def _update_room_fee_standard(room):
+    """根据房间内当前入住学生的收费标准，自动更新房间的收费标准
+    
+    规则：如果房间内有任何学生是单人间收费标准，则房间收费标准为单人间；
+    否则取房间内学生的收费标准（优先取第一个学生的）
+    """
+    if not room:
+        return
+    
+    students_in_room = Student.query.filter_by(room_id=room.id, status='active').all()
+    if not students_in_room:
+        # 房间空了，清除收费标准
+        room.fee_standard_id = None
+        return
+    
+    # 检查是否有单人间学生
+    for s in students_in_room:
+        if s.fee_standard_id:
+            fee_std = FeeStandard.query.get(s.fee_standard_id)
+            if fee_std and '单人间' in fee_std.name:
+                room.fee_standard_id = s.fee_standard_id
+                return
+    
+    # 没有单人间学生，取第一个有收费标准的学生
+    for s in students_in_room:
+        if s.fee_standard_id:
+            room.fee_standard_id = s.fee_standard_id
+            return
+
+
 class StudentForm(FlaskForm):
     """学生表单"""
     name = StringField('姓名', validators=[DataRequired(message='请输入姓名')])
@@ -191,6 +221,8 @@ def edit(id):
     
     if form.validate_on_submit():
         old_room_id = student.room_id
+        old_bed_occupancy = student.bed_occupancy
+        old_fee_standard_id = student.fee_standard_id
         
         form.populate_obj(student)
         
@@ -200,19 +232,52 @@ def edit(id):
         if student.fee_standard_id == 0:
             student.fee_standard_id = None
         
+        # 根据新的收费标准自动更新床位占用数
+        new_bed_occupancy = 1  # 默认双人间
+        if student.fee_standard_id:
+            fee_std = FeeStandard.query.get(student.fee_standard_id)
+            if fee_std and '单人间' in fee_std.name:
+                new_bed_occupancy = 2  # 单人间占用2个床位
+        student.bed_occupancy = new_bed_occupancy
+        
+        # 情况1：房间变更
         if old_room_id != student.room_id:
             if old_room_id:
                 old_room = Room.query.get(old_room_id)
                 if old_room:
-                    old_room.current_occupancy -= 1
-                    old_room.status = 'available'
+                    old_room.current_occupancy -= old_bed_occupancy
+                    if old_room.current_occupancy < old_room.capacity:
+                        old_room.status = 'available'
+                    # 更新旧房间的收费标准为当前入住学生的收费标准
+                    _update_room_fee_standard(old_room)
             
             if student.room_id:
                 new_room = Room.query.get(student.room_id)
                 if new_room:
-                    new_room.current_occupancy += 1
+                    new_room.current_occupancy += new_bed_occupancy
                     if new_room.current_occupancy >= new_room.capacity:
                         new_room.status = 'full'
+                    # 更新新房间的收费标准
+                    _update_room_fee_standard(new_room)
+        
+        # 情况2：房间不变，但收费标准（床位占用数）变了
+        elif old_room_id and old_bed_occupancy != new_bed_occupancy:
+            room = Room.query.get(old_room_id)
+            if room:
+                # 调整房间占用：减去旧的，加上新的
+                room.current_occupancy = room.current_occupancy - old_bed_occupancy + new_bed_occupancy
+                if room.current_occupancy >= room.capacity:
+                    room.status = 'full'
+                else:
+                    room.status = 'available'
+                # 更新房间的收费标准
+                _update_room_fee_standard(room)
+        
+        # 情况3：收费标准变了但bed_occupancy没变（如同类收费标准切换），仍需更新房间收费标准
+        elif old_room_id and old_fee_standard_id != student.fee_standard_id:
+            room = Room.query.get(old_room_id)
+            if room:
+                _update_room_fee_standard(room)
         
         db.session.commit()
         flash('学生信息更新成功！', 'success')
@@ -232,9 +297,11 @@ def delete(id):
     if student.room_id:
         room = Room.query.get(student.room_id)
         if room:
-            room.current_occupancy -= 1
+            room.current_occupancy -= student.bed_occupancy
             if room.current_occupancy < room.capacity:
                 room.status = 'available'
+            # 更新房间的收费标准
+            _update_room_fee_standard(room)
     
     # 归档学生信息（保存房间ID用于成本统计）
     student.status = 'archived'
@@ -263,9 +330,11 @@ def checkout(id):
     # 更新房间入住人数
     room = Room.query.get(student.room_id)
     if room:
-        room.current_occupancy -= 1
+        room.current_occupancy -= student.bed_occupancy
         if room.current_occupancy < room.capacity:
             room.status = 'available'
+        # 更新房间的收费标准
+        _update_room_fee_standard(room)
     
     # 清空学生的房间信息并归档（保存房间ID用于成本统计）
     if student.room_id:
@@ -300,9 +369,11 @@ def batch_checkout():
             # 更新房间入住人数
             room = Room.query.get(student.room_id)
             if room:
-                room.current_occupancy -= 1
+                room.current_occupancy -= student.bed_occupancy
                 if room.current_occupancy < room.capacity:
                     room.status = 'available'
+                # 记录需要更新收费标准的房间
+                room_to_update = room
             
             # 清空学生的房间信息并归档（保存房间ID用于成本统计）
             student.archived_room_id = student.room_id  # 保存房间ID用于归档后的成本统计
@@ -312,6 +383,17 @@ def batch_checkout():
             student.deleted_at = datetime.utcnow()
             student.retention_until = date.today() + timedelta(days=365*3)  # 保留3年
             count += 1
+    
+    # 批量退房后，更新受影响房间的收费标准
+    updated_rooms = set()
+    for student_id in student_ids:
+        student = Student.query.get(int(student_id))
+        if student and student.archived_room_id:
+            if student.archived_room_id not in updated_rooms:
+                room = Room.query.get(student.archived_room_id)
+                if room:
+                    _update_room_fee_standard(room)
+                updated_rooms.add(student.archived_room_id)
     
     db.session.commit()
     
