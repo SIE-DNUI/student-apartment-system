@@ -232,12 +232,8 @@ def edit(id):
         if student.fee_standard_id == 0:
             student.fee_standard_id = None
         
-        # 根据新的收费标准自动更新床位占用数
-        new_bed_occupancy = 1  # 默认双人间
-        if student.fee_standard_id:
-            fee_std = FeeStandard.query.get(student.fee_standard_id)
-            if fee_std and '单人间' in fee_std.name:
-                new_bed_occupancy = 2  # 单人间占用2个床位
+        # 从表单读取床位占用数（前端会根据收费标准自动切换，也可手动选择）
+        new_bed_occupancy = request.form.get('bed_occupancy', '1', type=int)
         student.bed_occupancy = new_bed_occupancy
         
         # 情况1：房间变更

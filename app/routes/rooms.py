@@ -513,3 +513,58 @@ def building_overview(building):
                              'full': full_rooms,
                              'empty_beds': total_empty_beds
                          })
+
+
+@bp.route('/<int:room_id>/toggle-type', methods=['POST'])
+@login_required
+@permission_required('write')
+def toggle_type(room_id):
+    """切换房间户型（单人间/双人间）- 同时更新该房间内所有学生的收费标准"""
+    room = Room.query.get_or_404(room_id)
+    
+    active_students = Student.query.filter_by(room_id=room_id, status='active').all()
+    
+    if not active_students:
+        flash('该房间没有入住学生，无法切换户型', 'warning')
+        return redirect(url_for('rooms.detail', room_id=room_id))
+    
+    # 判断当前户型：如果有任何学生bed_occupancy=2，当前为单人间，否则为双人间
+    is_current_single = any(s.bed_occupancy == 2 for s in active_students)
+    
+    if is_current_single:
+        # 单人间 → 双人间：所有学生bed_occupancy改为1，房间释放床位
+        for s in active_students:
+            s.bed_occupancy = 1
+        room.current_occupancy = len(active_students)  # 每人占1个床位
+        # 更新收费标准为双人间（找到含"双人间"的收费标准）
+        double_fee = FeeStandard.query.filter(FeeStandard.name.contains('双人间'), FeeStandard.is_active == True).first()
+        if double_fee:
+            for s in active_students:
+                s.fee_standard_id = double_fee.id
+            room.fee_standard_id = double_fee.id
+        flash(f'房间 {room.building}-{room.room_number} 已从单人间切换为双人间，释放1个床位', 'success')
+    else:
+        # 双人间 → 单人间：只能有一个学生，bed_occupancy改为2
+        if len(active_students) > 1:
+            flash(f'该房间有 {len(active_students)} 名学生，无法切换为单人间（单人间只能住1人）', 'danger')
+            return redirect(url_for('rooms.detail', room_id=room_id))
+        
+        for s in active_students:
+            s.bed_occupancy = 2
+        room.current_occupancy = 2  # 单人间占2个床位
+        # 更新收费标准为单人间（找到含"单人间"的收费标准）
+        single_fee = FeeStandard.query.filter(FeeStandard.name.contains('单人间'), FeeStandard.is_active == True).first()
+        if single_fee:
+            for s in active_students:
+                s.fee_standard_id = single_fee.id
+            room.fee_standard_id = single_fee.id
+        flash(f'房间 {room.building}-{room.room_number} 已从双人间切换为单人间', 'success')
+    
+    # 更新房间状态
+    if room.current_occupancy >= room.capacity:
+        room.status = 'full'
+    else:
+        room.status = 'available'
+    
+    db.session.commit()
+    return redirect(url_for('rooms.detail', room_id=room_id))

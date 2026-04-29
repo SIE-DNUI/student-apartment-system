@@ -60,11 +60,19 @@
                     <h6 class="text-muted mb-3"><i class="bi bi-currency-yuan me-2"></i>费用信息</h6>
                 </div>
                 
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">{{ form.fee_standard_id.label }}</label>
-                    {{ form.fee_standard_id(class="form-select") }}
+                    {{ form.fee_standard_id(class="form-select", id="fee_standard_select") }}
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label class="form-label">房间类型</label>
+                    <select name="bed_occupancy" class="form-select" id="bed_occupancy_select">
+                        <option value="1" {{ 'selected' if student.bed_occupancy == 1 }}>双人间（占用1个床位）</option>
+                        <option value="2" {{ 'selected' if student.bed_occupancy == 2 }}>单人间（占用2个床位）</option>
+                    </select>
+                    <small class="text-muted">收费标准改为单人间时自动切换</small>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">{{ form.payment_due_date.label }}</label>
                     {{ form.payment_due_date(class="form-control", type="date") }}
                 </div>
@@ -111,4 +119,17 @@
         </form>
     </div>
 </div>
+
+<script>
+// 收费标准变更时自动切换房间类型
+document.getElementById('fee_standard_select').addEventListener('change', function() {
+    var selectedText = this.options[this.selectedIndex].text;
+    var bedSelect = document.getElementById('bed_occupancy_select');
+    if (selectedText.includes('单人间')) {
+        bedSelect.value = '2';
+    } else {
+        bedSelect.value = '1';
+    }
+});
+</script>
 {% endblock %}
