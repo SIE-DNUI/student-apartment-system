@@ -36,6 +36,7 @@
                         <th>国籍</th>
                         <th>所属业务部</th>
                         <th>专业</th>
+                        <th>退房前入住</th>
                         <th>删除时间</th>
                         <th>保留截止</th>
                         <th>状态</th>
@@ -44,10 +45,19 @@
                 <tbody>
                     {% for student in students %}
                     <tr>
-                        <td>{{ student.name }}</td>
+                        <td><a href="{{ url_for('students.detail', id=student.id) }}">{{ student.name }}</a></td>
                         <td>{{ student.nationality or '-' }}</td>
                         <td>{{ student.department or '-' }}</td>
                         <td>{{ student.major or '-' }}</td>
+                        <td>
+                            {% if student.archived_room %}
+                            {{ student.archived_room.building }}-{{ student.archived_room.room_number }}
+                            {% elif student.room %}
+                            {{ student.room.building }}-{{ student.room.room_number }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
                         <td>{{ student.deleted_at.strftime('%Y-%m-%d %H:%M') if student.deleted_at else '-' }}</td>
                         <td>{{ student.retention_until or '-' }}</td>
                         <td>

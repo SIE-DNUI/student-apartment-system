@@ -68,6 +68,8 @@
         
         <!-- 批量退房表单 -->
         <form method="POST" action="{{ url_for('students.batch_checkout') }}" id="batch-checkout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="check_out_date" id="batch-checkout-date">
             <div class="table-responsive">
                 <table class="table table-hover">
                     <thead>
@@ -163,9 +165,10 @@
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
-                                <form method="POST" action="{{ url_for('students.checkout', id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要为 {{ student.name }} 办理退房吗？')">
+                                <form method="POST" action="{{ url_for('students.checkout', id=student.id) }}" class="d-inline" id="checkout-form-{{ student.id }}">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-warning" title="退房" {% if not student.room_id %}disabled{% endif %}>
+                                    <input type="hidden" name="check_out_date" id="checkout-date-{{ student.id }}">
+                                    <button type="button" class="btn btn-sm btn-outline-warning" title="退房" {% if student.room_id %}onclick="openCheckoutModal({{ student.id }}, '{{ student.name }}')"{% else %}disabled{% endif %}>
                                         <i class="bi bi-box-arrow-right"></i>
                                     </button>
                                 </form>
@@ -313,10 +316,7 @@
             alert('请选择要退房的学生');
             return;
         }
-        
-        if (confirm('确定要为选中的 ' + selected.length + ' 名学生办理退房吗？')) {
-            document.getElementById('batch-checkout-form').submit();
-        }
+        openBatchCheckoutModal(selected.length);
     }
     
     // 批量修改信息
@@ -400,5 +400,148 @@
             document.getElementById('batch-edit-form').submit();
         }
     }
+
+    // ===== 退房日期模态框 =====
+    function openCheckoutModal(studentId, studentName) {
+        const modal = document.getElementById('checkoutDateModal');
+        document.getElementById('checkout-student-name').textContent = studentName;
+        document.getElementById('checkout-date-input').value = '';
+        // 默认选"今天"
+        document.getElementById('checkout-use-today').checked = true;
+        document.getElementById('checkout-date-input').disabled = true;
+        document.getElementById('checkout-date-row').style.display = 'none';
+        modal.dataset.studentId = studentId;
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    }
+
+    function toggleCheckoutDateInput() {
+        const useToday = document.getElementById('checkout-use-today').checked;
+        document.getElementById('checkout-date-row').style.display = useToday ? 'none' : '';
+        document.getElementById('checkout-date-input').disabled = useToday;
+    }
+
+    function submitCheckoutDate() {
+        const modal = document.getElementById('checkoutDateModal');
+        const studentId = modal.dataset.studentId;
+        const useToday = document.getElementById('checkout-use-today').checked;
+        const dateInput = document.getElementById('checkout-date-input');
+        let checkOutDate = '';
+        if (!useToday) {
+            checkOutDate = dateInput.value.trim();
+            if (!checkOutDate) {
+                alert('请选择退房日期');
+                return;
+            }
+        }
+        document.getElementById('checkout-date-' + studentId).value = checkOutDate;
+        document.getElementById('checkout-form-' + studentId).submit();
+    }
+
+    // ===== 批量退房日期模态框 =====
+    function openBatchCheckoutModal(count) {
+        const modal = document.getElementById('batchCheckoutDateModal');
+        document.getElementById('batch-checkout-count').textContent = count;
+        document.getElementById('batch-checkout-date-input').value = '';
+        document.getElementById('batch-checkout-use-today').checked = true;
+        document.getElementById('batch-checkout-date-row').style.display = 'none';
+        document.getElementById('batch-checkout-date-input').disabled = true;
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    }
+
+    function toggleBatchCheckoutDateInput() {
+        const useToday = document.getElementById('batch-checkout-use-today').checked;
+        document.getElementById('batch-checkout-date-row').style.display = useToday ? 'none' : '';
+        document.getElementById('batch-checkout-date-input').disabled = useToday;
+    }
+
+    function submitBatchCheckoutDate() {
+        const useToday = document.getElementById('batch-checkout-use-today').checked;
+        const dateInput = document.getElementById('batch-checkout-date-input');
+        let checkOutDate = '';
+        if (!useToday) {
+            checkOutDate = dateInput.value.trim();
+            if (!checkOutDate) {
+                alert('请选择退房日期');
+                return;
+            }
+        }
+        document.getElementById('batch-checkout-date').value = checkOutDate;
+        document.getElementById('batch-checkout-form').submit();
+    }
 </script>
+
+<!-- 单个退房日期模态框 -->
+<div class="modal fade" id="checkoutDateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">选择退房日期</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>学生：<strong id="checkout-student-name"></strong></p>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="checkout_date_option" id="checkout-use-today" value="today" checked onchange="toggleCheckoutDateInput()">
+                        <label class="form-check-label" for="checkout-use-today">
+                            今天（<span id="checkout-today-label"></span>）
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="checkout_date_option" id="checkout-use-specific" value="specific" onchange="toggleCheckoutDateInput()">
+                        <label class="form-check-label" for="checkout-use-specific">
+                            选择其他日期
+                        </label>
+                    </div>
+                </div>
+                <div id="checkout-date-row" class="mt-2" style="display:none;">
+                    <input type="date" id="checkout-date-input" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitCheckoutDate()">确认退房</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量退房日期模态框 -->
+<div class="modal fade" id="batchCheckoutDateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">批量退房</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>已选择 <strong id="batch-checkout-count">0</strong> 名学生</p>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="batch_checkout_date_option" id="batch-checkout-use-today" value="today" checked onchange="toggleBatchCheckoutDateInput()">
+                        <label class="form-check-label" for="batch-checkout-use-today">
+                            今天（<span id="batch-checkout-today-label"></span>）
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="batch_checkout_date_option" id="batch-checkout-use-specific" value="specific" onchange="toggleBatchCheckoutDateInput()">
+                        <label class="form-check-label" for="batch-checkout-use-specific">
+                            选择其他日期
+                        </label>
+                    </div>
+                </div>
+                <div id="batch-checkout-date-row" class="mt-2" style="display:none;">
+                    <input type="date" id="batch-checkout-date-input" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitBatchCheckoutDate()">确认退房</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

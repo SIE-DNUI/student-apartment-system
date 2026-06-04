@@ -323,6 +323,16 @@ def checkout(id):
         flash('该学生未入住，无需退房', 'warning')
         return redirect(url_for('students.index'))
     
+    # 获取退房日期，默认今天
+    check_out_date_str = request.form.get('check_out_date', '').strip()
+    if check_out_date_str:
+        try:
+            check_out_date = datetime.strptime(check_out_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            check_out_date = date.today()
+    else:
+        check_out_date = date.today()
+    
     # 更新房间入住人数
     room = Room.query.get(student.room_id)
     if room:
@@ -336,7 +346,7 @@ def checkout(id):
     if student.room_id:
         student.archived_room_id = student.room_id  # 保存房间ID用于归档后的成本统计
     student.room_id = None
-    student.check_out_date = date.today()
+    student.check_out_date = check_out_date
     student.status = 'archived'
     student.deleted_at = datetime.utcnow()
     student.retention_until = date.today() + timedelta(days=365*3)  # 保留3年
@@ -358,6 +368,16 @@ def batch_checkout():
         flash('请选择要退房的学生', 'warning')
         return redirect(url_for('students.index'))
     
+    # 获取退房日期，默认今天
+    check_out_date_str = request.form.get('check_out_date', '').strip()
+    if check_out_date_str:
+        try:
+            check_out_date = datetime.strptime(check_out_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            check_out_date = date.today()
+    else:
+        check_out_date = date.today()
+    
     count = 0
     for student_id in student_ids:
         student = Student.query.get(int(student_id))
@@ -374,7 +394,7 @@ def batch_checkout():
             # 清空学生的房间信息并归档（保存房间ID用于成本统计）
             student.archived_room_id = student.room_id  # 保存房间ID用于归档后的成本统计
             student.room_id = None
-            student.check_out_date = date.today()
+            student.check_out_date = check_out_date
             student.status = 'archived'
             student.deleted_at = datetime.utcnow()
             student.retention_until = date.today() + timedelta(days=365*3)  # 保留3年

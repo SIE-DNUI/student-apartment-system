@@ -125,6 +125,7 @@ class Student(db.Model):
     # 住宿信息
     room_id = db.Column(db.Integer, db.ForeignKey('rooms.id'))
     archived_room_id = db.Column(db.Integer, db.ForeignKey('rooms.id'))  # 归档时保存的房间ID（用于成本统计）
+    archived_room = db.relationship('Room', foreign_keys='Student.archived_room_id')  # 归档后显示退房房间
     check_in_date = db.Column(db.Date)  # 入住日期
     check_out_date = db.Column(db.Date)  # 预计离开日期
     
