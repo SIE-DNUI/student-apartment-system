@@ -29,15 +29,17 @@ def index():
         Reservation.status == 'pending'
     ).order_by(Reservation.check_in_date).limit(5).all()
     
-    # 缴费即将到期提醒
+    # 缴费即将到期提醒（仅active学生，已退房/已归档/已毕业/未激活不显示）
     upcoming_due = Student.query.filter(
+        Student.status == 'active',
         Student.payment_due_date != None,
         Student.payment_due_date <= date.today() + timedelta(days=7),
         Student.payment_due_date >= date.today()
     ).all()
-    
-    # 居留许可即将到期提醒（30天内）
+
+    # 居留许可即将到期提醒（30天内，仅active学生）
     residence_permit_expiring = Student.query.filter(
+        Student.status == 'active',
         Student.residence_permit_expiry != None,
         Student.residence_permit_expiry <= date.today() + timedelta(days=30),
         Student.residence_permit_expiry >= date.today()
@@ -116,28 +118,32 @@ def get_dashboard_stats():
     # 今日入住
     today_checkins = Student.query.filter_by(check_in_date=date.today()).count()
     
-    # 即将到期
+    # 即将到期（仅active学生）
     due_soon = Student.query.filter(
+        Student.status == 'active',
         Student.payment_due_date != None,
         Student.payment_due_date <= date.today() + timedelta(days=7),
         Student.payment_due_date >= date.today()
     ).count()
-    
-    # 已过期
+
+    # 已过期（仅active学生）
     overdue = Student.query.filter(
+        Student.status == 'active',
         Student.payment_due_date != None,
         Student.payment_due_date < date.today()
     ).count()
-    
-    # 居留许可即将到期（30天内）
+
+    # 居留许可即将到期（30天内，仅active学生）
     residence_expiring = Student.query.filter(
+        Student.status == 'active',
         Student.residence_permit_expiry != None,
         Student.residence_permit_expiry <= date.today() + timedelta(days=30),
         Student.residence_permit_expiry >= date.today()
     ).count()
-    
-    # 居留许可已过期
+
+    # 居留许可已过期（仅active学生）
     residence_expired = Student.query.filter(
+        Student.status == 'active',
         Student.residence_permit_expiry != None,
         Student.residence_permit_expiry < date.today()
     ).count()
@@ -193,10 +199,13 @@ def get_dashboard_stats():
 @login_required
 def alerts():
     """提醒列表"""
-    alert_list = Alert.query.order_by(Alert.created_at.desc()).all()
+    # join Student 过滤掉已退房/已归档/已毕业/未激活学生的历史告警
+    alert_list = Alert.query.join(Student, Alert.student_id == Student.id).filter(
+        Student.status == 'active'
+    ).order_by(Alert.created_at.desc()).all()
     # 获取各类提醒统计
     stats = get_alert_stats()
-    return render_template('dashboard/alerts.html', title='提醒中心', alerts=alert_list, 
+    return render_template('dashboard/alerts.html', title='提醒中心', alerts=alert_list,
                           filter_type=None, stats=stats)
 
 
@@ -209,10 +218,14 @@ def alerts_by_type(alert_type):
     
     # 根据类型筛选提醒
     if alert_type == 'payment_due':
-        # 费用即将到期（7天内）
-        alert_list = Alert.query.filter_by(alert_type='payment_due').order_by(Alert.created_at.desc()).all()
-        # 同时获取即将到期的学生
+        # 费用即将到期（7天内）—— 仅active学生
+        alert_list = Alert.query.join(Student, Alert.student_id == Student.id).filter(
+            Student.status == 'active',
+            Alert.alert_type == 'payment_due'
+        ).order_by(Alert.created_at.desc()).all()
+        # 同时获取即将到期的学生（仅active）
         upcoming_students = Student.query.filter(
+            Student.status == 'active',
             Student.payment_due_date != None,
             Student.payment_due_date <= date.today() + timedelta(days=7),
             Student.payment_due_date >= date.today()
@@ -284,9 +297,14 @@ def alerts_by_type(alert_type):
                 alert.due_date = student.residence_permit_expiry
                 db.session.add(alert)
         db.session.commit()
-        alert_list = Alert.query.filter_by(alert_type='residence_permit_expiry').order_by(Alert.created_at.desc()).all()
+        alert_list = Alert.query.join(Student, Alert.student_id == Student.id).filter(
+            Student.status == 'active',
+            Alert.alert_type == 'residence_permit_expiry'
+        ).order_by(Alert.created_at.desc()).all()
     else:
-        alert_list = Alert.query.order_by(Alert.created_at.desc()).all()
+        alert_list = Alert.query.join(Student, Alert.student_id == Student.id).filter(
+            Student.status == 'active'
+        ).order_by(Alert.created_at.desc()).all()
     
     return render_template('dashboard/alerts.html', title='提醒中心', alerts=alert_list, 
                           filter_type=alert_type, stats=stats)
@@ -294,19 +312,21 @@ def alerts_by_type(alert_type):
 
 def get_alert_stats():
     """获取各类提醒统计 - 问题4"""
-    # 费用即将到期
+    # 费用即将到期（仅active学生）
     due_soon_count = Student.query.filter(
+        Student.status == 'active',
         Student.payment_due_date != None,
         Student.payment_due_date <= date.today() + timedelta(days=7),
         Student.payment_due_date >= date.today()
     ).count()
-    
+
     # 欠费学生
     all_students = Student.query.filter(Student.status == 'active').all()
     arrears_count = len([s for s in all_students if s.has_arrears()])
-    
-    # 居留许可到期
+
+    # 居留许可到期（仅active学生）
     residence_count = Student.query.filter(
+        Student.status == 'active',
         Student.residence_permit_expiry != None,
         Student.residence_permit_expiry <= date.today() + timedelta(days=30),
         Student.residence_permit_expiry >= date.today()

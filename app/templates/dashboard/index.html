@@ -11,7 +11,7 @@
     <ul class="mb-0">
         {% for student in residence_permit_expiring[:10] %}
         <li>
-            <strong>{{ student.name }}</strong> - 
+            <a href="{{ url_for('students.detail', id=student.id) }}" class="fw-bold text-decoration-none">{{ student.name }}</a> -
             {% if student.nationalality %}{{ student.nationalality }}{% endif %}
             到期日期: <span class="text-danger">{{ student.residence_permit_expiry }}</span>
             {% if student.days_until_residence_permit_expiry() is not none %}
@@ -369,7 +369,9 @@
                 <ul class="list-group list-group-flush small">
                     {% for s in upcoming_due[:5] %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ s.name }}
+                        <a href="{{ url_for('students.detail', id=s.id) }}" class="text-decoration-none">
+                            {{ s.name }}
+                        </a>
                         <span class="badge bg-warning text-dark">{{ s.payment_due_date }}</span>
                     </li>
                     {% endfor %}
