@@ -95,32 +95,85 @@
         
         <!-- 缴费信息 -->
         <h6 class="text-muted mb-3"><i class="bi bi-currency-yen me-2"></i>缴费信息</h6>
-        <div class="row g-4">
-            <div class="col-md-4">
-                <div class="card bg-light">
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card bg-light h-100">
                     <div class="card-body text-center">
-                        <h6 class="text-muted">已缴房费总计</h6>
-                        <h3 class="text-success">¥{{ "%.2f"|format(student.total_paid or 0) }}</h3>
+                        <h6 class="text-muted small">已缴房费总计</h6>
+                        <h4 class="text-success mb-0">¥{{ "%.2f"|format(student.total_paid or 0) }}</h4>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card {% if student.has_arrears() %}bg-danger text-white{% else %}bg-light{% endif %}">
+            <div class="col-md-3">
+                <div class="card {% if student.has_arrears() %}bg-danger text-white{% else %}bg-light{% endif %} h-100">
                     <div class="card-body text-center">
-                        <h6 class="{% if not student.has_arrears() %}text-muted{% endif %}">欠费金额</h6>
-                        <h3>¥{{ "%.2f"|format(student.calculate_arrears()) }}</h3>
+                        <h6 class="{% if not student.has_arrears() %}text-muted{% endif %} small">欠费金额</h6>
+                        <h4 class="mb-0">¥{{ "%.2f"|format(student.calculate_arrears()) }}</h4>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card bg-light">
+            <div class="col-md-3">
+                <div class="card bg-light h-100">
                     <div class="card-body text-center">
-                        <h6 class="text-muted">到期日期</h6>
-                        <h5>{{ student.payment_due_date or '未设置' }}</h5>
+                        <h6 class="text-muted small">有效到期日期</h6>
+                        {% set effective_date = student.get_effective_due_date() %}
+                        {% if effective_date %}
+                        <h5 class="mb-1 {% if student.is_payment_overdue() %}text-danger{% endif %}">{{ effective_date }}</h5>
+                        <small class="{% if student.payment_due_date %}text-primary{% else %}text-secondary{% endif %}">
+                            {% if student.payment_due_date %}
+                            <i class="bi bi-pencil-square me-1"></i>手动填写
+                            {% else %}
+                            <i class="bi bi-calculator me-1"></i>系统计算
+                            {% endif %}
+                        </small>
+                        {% else %}
+                        <h5 class="text-muted mb-0">未设置</h5>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card {% if remaining_info and remaining_info.remaining_days > 0 %}bg-info text-white{% else %}bg-light{% endif %} h-100">
+                    <div class="card-body text-center">
+                        <h6 class="{% if not (remaining_info and remaining_info.remaining_days > 0) %}text-muted{% endif %} small">剩余金额</h6>
+                        {% if remaining_info and remaining_info.remaining_days > 0 %}
+                        <h4 class="mb-1">¥{{ "%.2f"|format(remaining_info.refund_amount) }}</h4>
+                        <small>约 {{ remaining_info.remaining_days|round(1) }} 天</small>
+                        {% elif remaining_info %}
+                        <h4 class="mb-0">¥0.00</h4>
+                        <small>已消费 ¥{{ "%.2f"|format(student.total_paid or 0) }}</small>
+                        {% else %}
+                        <h5 class="text-muted mb-0">-</h5>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
+        
+        <!-- 到期日期明细（双轨显示） -->
+        {% if student.fee_standard and student.check_in_date and student.total_paid and student.total_paid > 0 %}
+        <div class="alert alert-light border mb-3">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>到期日期计算说明：</strong>
+                        入住日期 {{ student.check_in_date }}，
+                        已缴 ¥{{ "%.2f"|format(student.total_paid) }}，
+                        收费标准 ¥{{ "%.2f"|format(student.fee_standard.price) }}/{{ student.fee_standard.unit }}，
+                        系统计算可住到 <strong>{{ student.calculate_auto_due_date() or '-' }}</strong>
+                    </small>
+                </div>
+                <div class="col-md-4 text-end">
+                    {% if student.payment_due_date %}
+                    <span class="badge bg-primary"><i class="bi bi-pencil-square me-1"></i>当前以手动填写为准</span>
+                    {% else %}
+                    <span class="badge bg-secondary"><i class="bi bi-calculator me-1"></i>使用系统计算值</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
         
         <!-- 缴费操作 -->
         <div class="mt-4">
@@ -161,6 +214,54 @@
             </form>
         </div>
         
+        <!-- 退费操作 -->
+        {% if remaining_info and remaining_info.remaining_days > 0 %}
+        <div class="mt-3">
+            <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#refundForm">
+                <i class="bi bi-arrow-return-left me-1"></i> 办理退费
+            </button>
+            <div class="collapse mt-3" id="refundForm">
+                <div class="card border-danger">
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('students.detail', id=student.id) }}" onsubmit="return confirm('确定要退费 ¥' + document.getElementById('refund_amount_input').value + ' 吗？此操作不可撤销。')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="refund">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">退费金额</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">¥</span>
+                                        <input type="number" id="refund_amount_input" name="refund_amount" class="form-control" step="0.01" min="0.01" max="{{ remaining_info.refund_amount }}" value="{{ remaining_info.refund_amount }}">
+                                    </div>
+                                    <small class="text-muted">最多可退 ¥{{ "%.2f"|format(remaining_info.refund_amount) }}</small>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">退费方式</label>
+                                    <select name="refund_method" class="form-select">
+                                        <option value="现金">现金</option>
+                                        <option value="微信">微信</option>
+                                        <option value="支付宝">支付宝</option>
+                                        <option value="银行转账">银行转账</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">退费备注</label>
+                                    <input type="text" name="refund_notes" class="form-control" placeholder="如：学生提前退学">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button type="submit" class="btn btn-danger d-block w-100">
+                                        <i class="bi bi-arrow-return-left me-1"></i> 确认退费
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
         <!-- 居留许可信息 -->
         <hr>
         <h6 class="text-muted mb-3"><i class="bi bi-passport me-2"></i>居留许可信息</h6>
@@ -191,10 +292,10 @@
     </div>
 </div>
 
-<!-- 缴费记录 -->
+<!-- 缴费/退费记录 -->
 <div class="card">
     <div class="card-header">
-        <h5 class="mb-0">缴费记录</h5>
+        <h5 class="mb-0">缴费/退费记录</h5>
     </div>
     <div class="card-body p-0">
         {% if fee_records %}
@@ -202,17 +303,27 @@
             <table class="table table-hover mb-0">
                 <thead>
                     <tr>
-                        <th>缴费日期</th>
+                        <th>日期</th>
+                        <th>类型</th>
                         <th>金额</th>
-                        <th>缴费方式</th>
+                        <th>方式</th>
                         <th>备注</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for record in fee_records %}
-                    <tr>
+                    <tr class="{% if record.is_refund() %}table-warning{% endif %}">
                         <td>{{ record.payment_date }}</td>
-                        <td class="text-success fw-bold">¥{{ record.amount }}</td>
+                        <td>
+                            {% if record.is_refund() %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-arrow-return-left me-1"></i>退费</span>
+                            {% else %}
+                            <span class="badge bg-success"><i class="bi bi-plus-circle me-1"></i>缴费</span>
+                            {% endif %}
+                        </td>
+                        <td class="{% if record.is_refund() %}text-danger{% else %}text-success{% endif %} fw-bold">
+                            {% if record.is_refund() %}-{% endif %}¥{{ "%.2f"|format(record.amount|abs) }}
+                        </td>
                         <td>{{ record.payment_method or '-' }}</td>
                         <td>{{ record.notes or '-' }}</td>
                     </tr>

@@ -476,7 +476,7 @@ def detail(id):
     """学生详情"""
     student = Student.query.get_or_404(id)
     
-    # 处理缴费提交
+    # 处理POST请求
     if request.method == 'POST':
         action = request.form.get('action')
         
@@ -493,6 +493,7 @@ def detail(id):
                 fee_record = FeeRecord()
                 fee_record.student_id = student.id
                 fee_record.amount = payment_amount
+                fee_record.record_type = 'payment'
                 fee_record.payment_date = date.today()
                 fee_record.payment_method = payment_method
                 fee_record.notes = f'通过学生详情页缴纳'
@@ -508,13 +509,44 @@ def detail(id):
             db.session.commit()
             flash(f'缴费成功！已缴纳 ¥{payment_amount:.2f}', 'success')
             return redirect(url_for('students.detail', id=id))
+        
+        elif action == 'refund':
+            refund_amount = request.form.get('refund_amount', '0', type=float)
+            refund_method = request.form.get('refund_method', '现金')
+            refund_notes = request.form.get('refund_notes', '')
+            
+            remaining = student.calculate_remaining_refund()
+            
+            if refund_amount <= 0:
+                flash('退费金额必须大于0', 'danger')
+            elif refund_amount > remaining + 0.01:  # 允许微小浮点误差
+                flash(f'退费金额不能超过剩余金额 ¥{remaining:.2f}', 'danger')
+            else:
+                # 扣减已缴金额
+                student.total_paid = (student.total_paid or 0) - refund_amount
+                
+                # 添加退费记录（金额为负数）
+                fee_record = FeeRecord()
+                fee_record.student_id = student.id
+                fee_record.amount = -refund_amount
+                fee_record.record_type = 'refund'
+                fee_record.payment_date = date.today()
+                fee_record.payment_method = refund_method
+                fee_record.notes = f'退费' + (f'：{refund_notes}' if refund_notes else '')
+                db.session.add(fee_record)
+                
+                db.session.commit()
+                flash(f'退费成功！已退还 ¥{refund_amount:.2f}', 'success')
+                return redirect(url_for('students.detail', id=id))
     
     fee_records = FeeRecord.query.filter_by(student_id=id).order_by(FeeRecord.payment_date.desc()).all()
+    remaining_info = student.get_remaining_days_info()
     
     return render_template('students/detail.html',
                          title=f'{student.name} - 详情',
                          student=student,
-                         fee_records=fee_records)
+                         fee_records=fee_records,
+                         remaining_info=remaining_info)
 
 
 @bp.route('/batch-import', methods=['GET', 'POST'])

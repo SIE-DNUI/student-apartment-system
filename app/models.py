@@ -180,6 +180,132 @@ class Student(db.Model):
         
         return new_due_date
     
+    def calculate_auto_due_date(self):
+        """根据总已缴金额和收费标准，从入住日期自动计算到期日期"""
+        if not self.fee_standard_id or not self.check_in_date:
+            return None
+        
+        fee_std = FeeStandard.query.get(self.fee_standard_id)
+        if not fee_std or fee_std.price <= 0:
+            return None
+        
+        total_paid = self.total_paid or 0
+        if total_paid <= 0:
+            return None
+        
+        # 计算已缴费可以住多少个单位时间
+        units = total_paid / fee_std.price
+        
+        if fee_std.unit == '月':
+            days = int(units * 30)
+        elif fee_std.unit == '学期':
+            days = int(units * 120)
+        elif fee_std.unit == '年':
+            days = int(units * 365)
+        else:
+            days = int(units * 30)
+        
+        return self.check_in_date + timedelta(days=days)
+    
+    def get_effective_due_date(self):
+        """获取有效到期日期：手动填写优先，否则返回自动计算的"""
+        if self.payment_due_date:
+            return self.payment_due_date
+        return self.calculate_auto_due_date()
+    
+    def calculate_remaining_refund(self):
+        """计算剩余可退金额
+        
+        逻辑：
+        1. 计算已缴总金额可覆盖的总天数
+        2. 计算从入住到退房日期（或今天）的已消费天数
+        3. 剩余天数 = 已缴天数 - 已消费天数
+        4. 退款金额 = (剩余天数 / 单位天数) * 单价
+        """
+        if not self.fee_standard_id or not self.check_in_date:
+            return 0
+        
+        fee_std = FeeStandard.query.get(self.fee_standard_id)
+        if not fee_std or fee_std.price <= 0:
+            return 0
+        
+        total_paid = self.total_paid or 0
+        if total_paid <= 0:
+            return 0
+        
+        # 单位天数
+        if fee_std.unit == '月':
+            unit_days = 30
+        elif fee_std.unit == '学期':
+            unit_days = 120
+        elif fee_std.unit == '年':
+            unit_days = 365
+        else:
+            unit_days = 30
+        
+        # 已缴费可覆盖的总天数
+        total_paid_units = total_paid / fee_std.price
+        total_paid_days = total_paid_units * unit_days
+        
+        # 已消费天数
+        today = date.today()
+        end_date = self.check_out_date if self.check_out_date and self.check_out_date < today else today
+        consumed_days = max(0, (end_date - self.check_in_date).days)
+        
+        # 剩余天数
+        remaining_days = max(0, total_paid_days - consumed_days)
+        
+        if remaining_days <= 0:
+            return 0
+        
+        # 退款金额 = 剩余天数对应的费用
+        remaining_units = remaining_days / unit_days
+        refund_amount = remaining_units * fee_std.price
+        
+        return round(refund_amount, 2)
+    
+    def get_remaining_days_info(self):
+        """获取剩余天数详细信息，用于页面展示"""
+        if not self.fee_standard_id or not self.check_in_date:
+            return None
+        
+        fee_std = FeeStandard.query.get(self.fee_standard_id)
+        if not fee_std or fee_std.price <= 0:
+            return None
+        
+        total_paid = self.total_paid or 0
+        if total_paid <= 0:
+            return None
+        
+        # 单位天数
+        if fee_std.unit == '月':
+            unit_days = 30
+        elif fee_std.unit == '学期':
+            unit_days = 120
+        elif fee_std.unit == '年':
+            unit_days = 365
+        else:
+            unit_days = 30
+        
+        # 已缴费可覆盖的总天数
+        total_paid_units = total_paid / fee_std.price
+        total_paid_days = total_paid_units * unit_days
+        
+        # 已消费天数
+        today = date.today()
+        end_date = self.check_out_date if self.check_out_date and self.check_out_date < today else today
+        consumed_days = max(0, (end_date - self.check_in_date).days)
+        
+        # 剩余天数
+        remaining_days = total_paid_days - consumed_days
+        
+        return {
+            'total_paid_days': round(total_paid_days, 1),
+            'consumed_days': consumed_days,
+            'remaining_days': round(remaining_days, 1),
+            'refund_amount': self.calculate_remaining_refund()
+        }
+    
     def is_payment_overdue(self):
         """是否已过期"""
         if not self.payment_due_date:
@@ -262,7 +388,8 @@ class FeeRecord(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
-    amount = db.Column(db.Float, nullable=False)  # 缴费金额
+    amount = db.Column(db.Float, nullable=False)  # 缴费金额（退费为负数）
+    record_type = db.Column(db.String(20), default='payment')  # payment=缴费, refund=退费
     payment_date = db.Column(db.Date, nullable=False)  # 缴费日期
     payment_method = db.Column(db.String(50))  # 缴费方式
     payment_period_start = db.Column(db.Date)  # 缴费期间开始
@@ -272,8 +399,12 @@ class FeeRecord(db.Model):
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    def is_refund(self):
+        """是否为退费记录"""
+        return self.record_type == 'refund'
+    
     def __repr__(self):
-        return f'<FeeRecord {self.id}: {self.amount}>'
+        return f'<FeeRecord {self.id}: {self.amount} ({self.record_type})>'
 
 
 class Reservation(db.Model):
