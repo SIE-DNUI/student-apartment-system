@@ -23,6 +23,7 @@
                         <th>名称</th>
                         <th>单价</th>
                         <th>单位</th>
+                        <th>计费类型</th>
                         <th>使用学生数</th>
                         <th>状态</th>
                         <th>备注</th>
@@ -35,6 +36,7 @@
                         <td><strong>{{ standard.name }}</strong></td>
                         <td class="text-primary fw-bold">¥{{ standard.price }}</td>
                         <td>/{{ standard.unit }}</td>
+                        <td>{{ standard.fee_type or '学年' }}</td>
                         <td>{{ standard.students.count() }}</td>
                         <td>
                             {% if standard.is_active %}
@@ -60,7 +62,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center py-4 text-muted">
+                        <td colspan="8" class="text-center py-4 text-muted">
                             <i class="bi bi-currency-yuan" style="font-size: 2rem;"></i>
                             <p class="mt-2 mb-0">暂无收费标准</p>
                         </td>

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>换房型 / 收费标准</h5>
+        <a href="{{ url_for('students.detail', id=student.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> 返回详情
+        </a>
+    </div>
+    <div class="card-body">
+        <!-- 学生基本信息 -->
+        <div class="alert alert-light border">
+            <div class="row">
+                <div class="col-md-3"><strong>学生：</strong>{{ student.name }}</div>
+                <div class="col-md-3"><strong>当前房间：</strong>{{ student.room.building }}-{{ student.room.room_number }}</div>
+                <div class="col-md-3"><strong>当前标准：</strong>{{ student.fee_standard.name if student.fee_standard else '-' }}</div>
+                <div class="col-md-3"><strong>入住日期：</strong>{{ student.check_in_date }}</div>
+            </div>
+        </div>
+
+        <!-- 选择表单 -->
+        <form method="POST" action="{{ url_for('students.switch_room', id=student.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="preview">
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-5">
+                    <label class="form-label fw-bold">选择新收费标准</label>
+                    <select name="new_fee_standard_id" class="form-select" required>
+                        <option value="">-- 请选择 --</option>
+                        {% for fs in fee_standards %}
+                        <option value="{{ fs.id }}" {% if new_fee_standard_id == fs.id %}selected{% endif %}>
+                            {{ fs.name }} — ¥{{ "%.2f"|format(fs.price) }}/{{ fs.unit }}
+                            {% if fs.fee_type == '学年' %}（学年制，不含寒暑假）{% elif fs.fee_type == '自然年' %}（自然年，含假期）{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">切换日期</label>
+                    <input type="date" name="switch_date" class="form-control" value="{{ switch_date or '' }}" required>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary d-block w-100">
+                        <i class="bi bi-calculator me-1"></i> 预览费用结算
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        {% if preview %}
+        <hr>
+        <h5 class="mb-3"><i class="bi bi-receipt me-2"></i>费用结算预览</h5>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card bg-light h-100">
+                    <div class="card-body text-center">
+                        <h6 class="text-muted small">旧标准已消费</h6>
+                        <p class="small text-muted">{{ preview.old_fee.name }} · {{ preview.consumed_days }} 天</p>
+                        <h4 class="text-danger mb-0">¥{{ "%.2f"|format(preview.consumed_value) }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card {% if preview.remaining_value > 0 %}bg-success text-white{% else %}bg-light{% endif %} h-100">
+                    <div class="card-body text-center">
+                        <h6 class="{% if preview.remaining_value > 0 %}{% else %}text-muted{% endif %} small">剩余价值（结转）</h6>
+                        <p class="small {% if preview.remaining_value > 0 %}opacity-75{% else %}text-muted{% endif %}">已缴 ¥{{ "%.2f"|format(preview.base_paid) }} - 已消费 ¥{{ "%.2f"|format(preview.consumed_value) }}</p>
+                        <h4 class="mb-0">¥{{ "%.2f"|format(preview.remaining_value) }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card {% if preview.needs_payment %}bg-warning{% elif preview.remaining_value > 0 %}bg-info text-white{% else %}bg-light{% endif %} h-100">
+                    <div class="card-body text-center">
+                        <h6 class="{% if preview.needs_payment %}{% elif preview.remaining_value > 0 %}{% else %}text-muted{% endif %} small">新标准费用（{{ preview.days_to_cover }} 天）</h6>
+                        <p class="small {% if preview.needs_payment %}{% elif preview.remaining_value > 0 %}opacity-75{% else %}text-muted{% endif %}">{{ preview.new_fee.name }} · {{ preview.original_due }}</p>
+                        <h4 class="mb-0">¥{{ "%.2f"|format(preview.needed_for_period) }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert {% if preview.needs_payment %}alert-warning{% elif preview.remaining_value > 0 %}alert-info{% else %}alert-success{% endif %}">
+            {% if preview.needs_payment %}
+            <i class="bi bi-arrow-up-circle me-2"></i>
+            <strong>需补缴差价：</strong>¥{{ "%.2f"|format(preview.difference) }}
+            <br><small>新标准费用 ¥{{ "%.2f"|format(preview.needed_for_period) }} - 剩余价值 ¥{{ "%.2f"|format(preview.remaining_value) }}</small>
+            {% elif preview.remaining_value > 0 %}
+            <i class="bi bi-check-circle me-2"></i>
+            <strong>余额充足，无需补缴！</strong>
+            <br><small>剩余价值 ¥{{ "%.2f"|format(preview.remaining_value) }} 可覆盖新标准 ¥{{ "%.2f"|format(preview.needed_for_period) }} 的费用，多余部分将继续有效。</small>
+            {% else %}
+            <i class="bi bi-check-circle me-2"></i>
+            <strong>费用刚好，无需补缴！</strong>
+            {% endif %}
+            <br><small class="text-muted">新标准下剩余价值可住约 {{ preview.new_remaining_days }} 天，预计到期日：{{ preview.new_due_date }}</small>
+        </div>
+
+        <!-- 确认执行表单 -->
+        <form method="POST" action="{{ url_for('students.switch_room', id=student.id) }}" onsubmit="return confirm('确定执行换房型操作吗？此操作不可撤销。')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="confirm">
+            <input type="hidden" name="new_fee_standard_id" value="{{ preview.new_fee.id }}">
+            <input type="hidden" name="switch_date" value="{{ preview.switch_date }}">
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">选择新房间（可选，不选则仅更换收费标准）</label>
+                    <select name="new_room_id" class="form-select">
+                        <option value="">-- 不更换房间 --</option>
+                        {% for room in available_rooms %}
+                        <option value="{{ room.id }}">
+                            {{ room.building }}-{{ room.room_number }}（楼层{{ room.floor or '-' }}，剩余 {{ room.available_beds }} 床位）
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-check-lg me-1"></i> 确认执行换房型
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

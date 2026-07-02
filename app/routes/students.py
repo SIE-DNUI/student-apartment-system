@@ -549,6 +549,156 @@ def detail(id):
                          remaining_info=remaining_info)
 
 
+@bp.route('/switch-room/<int:id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('write')
+def switch_room(id):
+    """换房型/收费标准"""
+    student = Student.query.get_or_404(id)
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        if action == 'preview':
+            # 预览模式：选择新标准和切换日期后显示费用结算
+            new_fee_standard_id = request.form.get('new_fee_standard_id', type=int)
+            switch_date_str = request.form.get('switch_date')
+            
+            if not new_fee_standard_id or not switch_date_str:
+                flash('请选择新收费标准和切换日期', 'danger')
+                return redirect(url_for('students.switch_room', id=id))
+            
+            switch_date = datetime.strptime(switch_date_str, '%Y-%m-%d').date()
+            preview_data = student.preview_room_switch(new_fee_standard_id, switch_date)
+            
+            # 获取所有可用收费标准（排除当前）
+            fee_standards = FeeStandard.query.filter(
+                FeeStandard.is_active == True,
+                FeeStandard.id != student.fee_standard_id
+            ).all()
+            
+            # 获取可选房间
+            new_fee_std = FeeStandard.query.get(new_fee_standard_id)
+            available_rooms = []
+            if new_fee_std:
+                available_rooms = Room.query.filter(
+                    Room.fee_standard_id == new_fee_standard_id,
+                    Room.status != 'maintenance'
+                ).all()
+            
+            return render_template('students/switch_room.html',
+                                 title=f'{student.name} - 换房型',
+                                 student=student,
+                                 fee_standards=fee_standards,
+                                 preview=preview_data,
+                                 switch_date=switch_date_str,
+                                 new_fee_standard_id=new_fee_standard_id,
+                                 available_rooms=available_rooms)
+        
+        elif action == 'confirm':
+            # 确认执行换房型
+            new_fee_standard_id = request.form.get('new_fee_standard_id', type=int)
+            new_room_id = request.form.get('new_room_id', type=int)
+            switch_date_str = request.form.get('switch_date')
+            
+            if not new_fee_standard_id or not switch_date_str:
+                flash('参数缺失', 'danger')
+                return redirect(url_for('students.detail', id=id))
+            
+            switch_date = datetime.strptime(switch_date_str, '%Y-%m-%d').date()
+            
+            # 重新计算preview（确保数据准确）
+            preview_data = student.preview_room_switch(new_fee_standard_id, switch_date)
+            
+            if not preview_data:
+                flash('无法计算换房型费用，请检查信息', 'danger')
+                return redirect(url_for('students.detail', id=id))
+            
+            result = student.execute_room_switch(new_fee_standard_id, new_room_id, switch_date, preview_data)
+            
+            if result['needs_payment']:
+                flash(f'换房型成功！需补缴 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
+            elif result['difference'] > 0.01:
+                flash(f'换房型成功！余额充足，剩余 ¥{result["difference"]:.2f} 已结转，新到期日：{result["new_due_date"]}', 'success')
+            else:
+                flash(f'换房型成功！新到期日：{result["new_due_date"]}', 'success')
+            
+            return redirect(url_for('students.detail', id=id))
+    
+    # GET请求：显示换房型表单
+    fee_standards = FeeStandard.query.filter(
+        FeeStandard.is_active == True,
+        FeeStandard.id != student.fee_standard_id
+    ).all()
+    
+    return render_template('students/switch_room.html',
+                         title=f'{student.name} - 换房型',
+                         student=student,
+                         fee_standards=fee_standards,
+                         preview=None,
+                         switch_date=None,
+                         new_fee_standard_id=None,
+                         available_rooms=[])
+
+
+@bp.route('/batch-payment', methods=['GET', 'POST'])
+@login_required
+@permission_required('write')
+def batch_payment():
+    """批量交房费"""
+    if request.method == 'POST':
+        fee_standard_id = request.form.get('fee_standard_id', type=int)
+        payment_amount = request.form.get('payment_amount', 0, type=float)
+        payment_method = request.form.get('payment_method', '现金')
+        payment_notes = request.form.get('payment_notes', '')
+        
+        if not fee_standard_id or payment_amount <= 0:
+            flash('请选择收费标准并输入缴费金额', 'danger')
+            return redirect(request.url)
+        
+        # 查找该收费标准的所有active学生
+        students = Student.query.filter_by(
+            fee_standard_id=fee_standard_id,
+            status='active'
+        ).all()
+        
+        if not students:
+            flash('该收费标准下没有在读学生', 'warning')
+            return redirect(request.url)
+        
+        count = 0
+        for student in students:
+            student.total_paid = (student.total_paid or 0) + payment_amount
+            
+            fee_record = FeeRecord()
+            fee_record.student_id = student.id
+            fee_record.amount = payment_amount
+            fee_record.record_type = 'payment'
+            fee_record.payment_date = date.today()
+            fee_record.payment_method = payment_method
+            fee_record.notes = f'批量缴费' + (f'：{payment_notes}' if payment_notes else '')
+            db.session.add(fee_record)
+            count += 1
+        
+        db.session.commit()
+        flash(f'批量缴费成功！共 {count} 名学生，每人 ¥{payment_amount:.2f}', 'success')
+        return redirect(url_for('students.index'))
+    
+    # GET请求
+    fee_standards = FeeStandard.query.filter_by(is_active=True).order_by(FeeStandard.name).all()
+    
+    # 统计每个标准下的active学生数
+    standard_counts = {}
+    for std in fee_standards:
+        count = Student.query.filter_by(fee_standard_id=std.id, status='active').count()
+        standard_counts[std.id] = count
+    
+    return render_template('students/batch_payment.html',
+                         title='批量交房费',
+                         fee_standards=fee_standards,
+                         standard_counts=standard_counts)
+
+
 @bp.route('/batch-import', methods=['GET', 'POST'])
 @login_required
 @permission_required('write')

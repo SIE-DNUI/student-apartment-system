@@ -21,7 +21,8 @@ bp = Blueprint('fees', __name__, url_prefix='/fees')
 class FeeStandardForm(FlaskForm):
     name = StringField('标准名称', validators=[DataRequired(message='请输入标准名称')])
     price = FloatField('单价', validators=[InputRequired(message='请输入单价')])
-    unit = SelectField('单位', choices=[('月', '月'), ('学期', '学期'), ('年', '年'), ('天', '天')], validators=[DataRequired()])
+    unit = SelectField('单位', choices=[('月', '月'), ('学期', '学期'), ('年', '年'), ('天', '天'), ('次', '次')], validators=[DataRequired()])
+    fee_type = SelectField('计费类型', choices=[('学年', '学年制（10个月，不含寒暑假）'), ('自然年', '自然年制（12个月，含假期）')], validators=[Optional()])
     description = StringField('备注说明', validators=[Optional()])
     is_active = SelectField('是否启用', choices=[('1', '是'), ('0', '否')])
 

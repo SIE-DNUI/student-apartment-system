@@ -221,6 +221,9 @@
             <a href="{{ url_for('students.index') }}" class="nav-link {% if request.endpoint and 'students' in request.endpoint and request.endpoint != 'students.archived' %}active{% endif %}">
                 <i class="bi bi-people me-2"></i> 学生管理
             </a>
+            <a href="{{ url_for('students.batch_payment') }}" class="nav-link {% if request.endpoint == 'students.batch_payment' %}active{% endif %}">
+                <i class="bi bi-cash-stack me-2"></i> 批量交房费
+            </a>
             <a href="{{ url_for('students.archived') }}" class="nav-link {% if request.endpoint == 'students.archived' %}active{% endif %}">
                 <i class="bi bi-archive me-2"></i> 归档学生
             </a>

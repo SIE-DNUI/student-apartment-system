@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-cash-stack me-2"></i>批量交房费</h5>
+        <a href="{{ url_for('students.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> 返回列表
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            批量缴费将对所选收费标准下的<strong>所有在读学生</strong>统一记录一笔缴费，每人金额相同。
+        </div>
+
+        <form method="POST" onsubmit="return confirm('确定要为 {{ student_count_placeholder }} 名学生批量缴费 ¥' + document.getElementById('payment_amount_input').value + ' 吗？');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-5">
+                    <label class="form-label fw-bold">选择收费标准</label>
+                    <select name="fee_standard_id" class="form-select" required onchange="updateCount(this)">
+                        <option value="">-- 请选择 --</option>
+                        {% for fs in fee_standards %}
+                        <option value="{{ fs.id }}" data-count="{{ standard_counts.get(fs.id, 0) }}">
+                            {{ fs.name }} — ¥{{ "%.2f"|format(fs.price) }}/{{ fs.unit }}
+                            （{{ standard_counts.get(fs.id, 0) }} 名在读）
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">每人缴费金额</label>
+                    <div class="input-group">
+                        <span class="input-group-text">¥</span>
+                        <input type="number" id="payment_amount_input" name="payment_amount" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">缴费方式</label>
+                    <select name="payment_method" class="form-select">
+                        <option value="现金">现金</option>
+                        <option value="微信">微信</option>
+                        <option value="支付宝">支付宝</option>
+                        <option value="银行转账">银行转账</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">备注（可选）</label>
+                    <input type="text" name="payment_notes" class="form-control" placeholder="如：2026年秋季学期住宿费">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="alert alert-warning w-100 mb-0 py-2" id="totalAlert" style="display:none;">
+                        <small>预计总支出：<strong id="totalAmount">¥0.00</strong>（<span id="studentCount">0</span> 人）</small>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-check-lg me-1"></i> 确认批量缴费
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+function updateCount(select) {
+    var option = select.options[select.selectedIndex];
+    var count = option.getAttribute('data-count') || 0;
+    document.getElementById('studentCount').textContent = count;
+    
+    var amount = document.getElementById('payment_amount_input');
+    if (amount.value && count > 0) {
+        var total = (parseFloat(amount.value) * parseInt(count)).toFixed(2);
+        document.getElementById('totalAmount').textContent = '¥' + total;
+        document.getElementById('totalAlert').style.display = 'block';
+    } else {
+        document.getElementById('totalAlert').style.display = 'none';
+    }
+}
+
+document.getElementById('payment_amount_input').addEventListener('input', function() {
+    var select = document.querySelector('select[name="fee_standard_id"]');
+    var option = select.options[select.selectedIndex];
+    var count = option ? (option.getAttribute('data-count') || 0) : 0;
+    
+    if (this.value && count > 0) {
+        var total = (parseFloat(this.value) * parseInt(count)).toFixed(2);
+        document.getElementById('totalAmount').textContent = '¥' + total;
+        document.getElementById('totalAlert').style.display = 'block';
+    } else {
+        document.getElementById('totalAlert').style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

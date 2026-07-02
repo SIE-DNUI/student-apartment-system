@@ -31,7 +31,12 @@
                     {{ form.unit(class="form-select") }}
                 </div>
                 
-                <div class="col-md-6">
+                <div class="col-md-4">
+                    <label class="form-label">{{ form.fee_type.label }}</label>
+                    {{ form.fee_type(class="form-select") }}
+                    <small class="text-muted">学年制跳过寒暑假计费</small>
+                </div>
+                <div class="col-md-4">
                     <label class="form-label">{{ form.is_active.label }}</label>
                     {{ form.is_active(class="form-select") }}
                     <small class="text-muted">停用的标准将不会出现在下拉选项中</small>
