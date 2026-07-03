@@ -418,9 +418,6 @@
             return;
         }
 
-        // 关闭批量修改模态框
-        closeBatchEditModal();
-
         // 填充缴费模态框
         document.getElementById('batch-payment-count').textContent = selected.length;
         document.getElementById('bp_amount').value = '';
@@ -438,17 +435,24 @@
             container.appendChild(input);
         });
 
-        // 显示缴费模态框
-        const modal = document.getElementById('batchPaymentFromEditModal');
-        modal.classList.add('show');
-        modal.style.display = 'block';
-        document.body.classList.add('modal-open');
-        let backdrop = document.querySelector('.modal-backdrop');
-        if (!backdrop) {
-            backdrop = document.createElement('div');
-            backdrop.className = 'modal-backdrop fade show';
-            document.body.appendChild(backdrop);
-        }
+        // 先隐藏批量修改模态框（保留backdrop，不触发body样式变化）
+        var editModal = document.getElementById('batchEditModal');
+        editModal.classList.remove('show');
+        editModal.style.display = 'none';
+
+        // 延迟150ms后显示缴费模态框，确保DOM渲染完成
+        setTimeout(function() {
+            var payModal = document.getElementById('batchPaymentFromEditModal');
+            payModal.classList.add('show');
+            payModal.style.display = 'block';
+            document.body.classList.add('modal-open');
+            // 确保有backdrop
+            if (!document.querySelector('.modal-backdrop')) {
+                var backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade show';
+                document.body.appendChild(backdrop);
+            }
+        }, 150);
     }
 
     function closeBatchPaymentFromEdit() {
