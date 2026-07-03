@@ -339,9 +339,10 @@
             document.getElementById('sidebar').classList.toggle('show');
         });
         
-        // 自动关闭提示
+        // 自动关闭提示（跳过模态框内的alert，避免破坏未打开的弹窗）
         setTimeout(function() {
             document.querySelectorAll('.alert').forEach(function(alert) {
+                if (alert.closest('.modal')) return;
                 var bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
                 bsAlert.close();
             });
