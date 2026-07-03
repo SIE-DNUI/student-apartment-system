@@ -699,6 +699,45 @@ def batch_payment():
                          standard_counts=standard_counts)
 
 
+@bp.route('/batch-payment-selected', methods=['POST'])
+@login_required
+@permission_required('write')
+def batch_payment_selected():
+    """批量缴费（针对选中的学生）"""
+    student_ids = request.form.getlist('student_ids')
+    payment_amount = request.form.get('payment_amount', 0, type=float)
+    payment_method = request.form.get('payment_method', '现金')
+    payment_notes = request.form.get('payment_notes', '')
+
+    if not student_ids:
+        flash('请先选择学生', 'warning')
+        return redirect(url_for('students.index'))
+
+    if payment_amount <= 0:
+        flash('请输入有效的缴费金额', 'danger')
+        return redirect(url_for('students.index'))
+
+    count = 0
+    for student_id in student_ids:
+        student = Student.query.get(int(student_id))
+        if student and student.status == 'active':
+            student.total_paid = (student.total_paid or 0) + payment_amount
+
+            fee_record = FeeRecord()
+            fee_record.student_id = student.id
+            fee_record.amount = payment_amount
+            fee_record.record_type = 'payment'
+            fee_record.payment_date = date.today()
+            fee_record.payment_method = payment_method
+            fee_record.notes = f'批量缴费' + (f'：{payment_notes}' if payment_notes else '')
+            db.session.add(fee_record)
+            count += 1
+
+    db.session.commit()
+    flash(f'批量缴费成功！共 {count} 名学生，每人 ¥{payment_amount:.2f}', 'success')
+    return redirect(url_for('students.index'))
+
+
 @bp.route('/batch-import', methods=['GET', 'POST'])
 @login_required
 @permission_required('write')
