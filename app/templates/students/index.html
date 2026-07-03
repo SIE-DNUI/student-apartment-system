@@ -279,17 +279,12 @@
                         <input type="date" class="form-control" id="batch_residence_permit_expiry" name="residence_permit_expiry" placeholder="留空则不修改">
                     </div>
 
-                    <hr>
-                    <div class="mb-0">
-                        <label class="form-label text-muted mb-2">其他操作</label>
-                        <button type="button" class="btn btn-success btn-sm" onclick="switchToPaymentPage()">
-                            <i class="bi bi-cash-coin me-1"></i>批量缴费
-                        </button>
-                        <small class="text-muted ms-2">为选中的学生添加缴费记录</small>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeBatchEditModal()">取消</button>
+                    <button type="button" class="btn btn-success" id="btn-switch-payment">
+                        <i class="bi bi-cash-coin me-1"></i>批量缴费
+                    </button>
                     <button type="button" class="btn btn-primary" onclick="submitBatchEdit()">
                         <i class="bi bi-check-lg me-1"></i>确认修改
                     </button>
@@ -369,6 +364,13 @@
     // 监听单个复选框变化
     document.querySelectorAll('.student-checkbox').forEach(function(cb) {
         cb.addEventListener('change', updateSelectedCount);
+    });
+
+    // 批量缴费按钮点击
+    document.getElementById('btn-switch-payment').addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        switchToPaymentPage();
     });
     
     // 批量退房
