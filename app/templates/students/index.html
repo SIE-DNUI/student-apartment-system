@@ -272,7 +272,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-success" id="btn-go-payment">
+                    <button type="button" class="btn btn-success" onclick="goToPaymentPage()">
                         <i class="bi bi-cash-coin me-1"></i>批量缴费
                     </button>
                     <button type="button" class="btn btn-primary" onclick="submitBatchEdit()">
@@ -324,7 +324,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" id="btn-back-edit">
+                    <button type="button" class="btn btn-outline-secondary" onclick="backToEditPage()">
                         <i class="bi bi-arrow-left me-1"></i>返回修改
                     </button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -360,7 +360,7 @@
         cb.addEventListener('change', updateSelectedCount);
     });
 
-    // 批量缴费按钮点击 - 使用内联 onclick，见 HTML 中 switchToPaymentPage()
+    // 批量缴费按钮点击 - 使用内联 onclick="goToPaymentPage()"，见 HTML 按钮定义
     
     // 批量退房
     function batchCheckout() {
@@ -391,21 +391,36 @@
     }
 
     // ===== 两个独立模态框之间的切换 =====
-    // 从编辑模态框 → 缴费模态框
-    document.getElementById('btn-go-payment').addEventListener('click', function() {
+    // 从编辑模态框 → 缴费模态框（由按钮 onclick="goToPaymentPage()" 调用）
+    function goToPaymentPage() {
+        console.log('[goToPaymentPage] 开始执行');
         var selected = document.querySelectorAll('.student-checkbox:checked');
+        console.log('[goToPaymentPage] 选中学生数:', selected.length);
         if (selected.length === 0) {
             alert('请先选择学生');
             return;
         }
 
-        // 先填充缴费模态框数据
-        document.getElementById('batch-payment-count').textContent = selected.length;
-        document.getElementById('bp_amount').value = '';
-        document.getElementById('bp_notes').value = '';
-        document.getElementById('bp-total-summary').style.display = 'none';
-
+        // 填充缴费模态框数据
+        var countEl = document.getElementById('batch-payment-count');
+        var amountEl = document.getElementById('bp_amount');
+        var notesEl = document.getElementById('bp_notes');
+        var summaryEl = document.getElementById('bp-total-summary');
         var container = document.getElementById('batch-payment-student-ids');
+
+        console.log('[goToPaymentPage] countEl:', countEl, 'amountEl:', amountEl, 'notesEl:', notesEl, 'summaryEl:', summaryEl, 'container:', container);
+
+        if (!countEl || !amountEl || !notesEl || !summaryEl || !container) {
+            console.error('[goToPaymentPage] 缴费模态框元素缺失，请检查页面是否正确加载');
+            alert('系统错误：缴费窗口未能正确加载，请刷新页面后重试');
+            return;
+        }
+
+        countEl.textContent = selected.length;
+        amountEl.value = '';
+        notesEl.value = '';
+        summaryEl.style.display = 'none';
+
         container.innerHTML = '';
         selected.forEach(function(cb) {
             var input = document.createElement('input');
@@ -426,13 +441,20 @@
         editModalEl.addEventListener('hidden.bs.modal', function handler() {
             editModalEl.removeEventListener('hidden.bs.modal', handler);
             var paymentModalEl = document.getElementById('batchPaymentModal');
+            console.log('[goToPaymentPage] paymentModalEl:', paymentModalEl);
+            if (!paymentModalEl) {
+                console.error('[goToPaymentPage] batchPaymentModal 元素不存在！');
+                alert('系统错误：缴费窗口未找到，请刷新页面后重试');
+                return;
+            }
             var paymentModal = bootstrap.Modal.getOrCreateInstance(paymentModalEl);
             paymentModal.show();
+            console.log('[goToPaymentPage] 缴费模态框已打开');
         });
-    });
+    }
 
-    // 从缴费模态框 → 编辑模态框
-    document.getElementById('btn-back-edit').addEventListener('click', function() {
+    // 从缴费模态框 → 编辑模态框（由按钮 onclick="backToEditPage()" 调用）
+    function backToEditPage() {
         var paymentModalEl = document.getElementById('batchPaymentModal');
         var paymentModal = bootstrap.Modal.getInstance(paymentModalEl);
         if (paymentModal) {
@@ -445,7 +467,7 @@
             var editModal = bootstrap.Modal.getOrCreateInstance(editModalEl);
             editModal.show();
         });
-    });
+    }
     
     // 提交批量修改表单
     function submitBatchEdit() {
