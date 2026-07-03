@@ -393,9 +393,7 @@
     // ===== 两个独立模态框之间的切换 =====
     // 从编辑模态框 → 缴费模态框（由按钮 onclick="goToPaymentPage()" 调用）
     function goToPaymentPage() {
-        console.log('[goToPaymentPage] 开始执行');
         var selected = document.querySelectorAll('.student-checkbox:checked');
-        console.log('[goToPaymentPage] 选中学生数:', selected.length);
         if (selected.length === 0) {
             alert('请先选择学生');
             return;
@@ -408,10 +406,7 @@
         var summaryEl = document.getElementById('bp-total-summary');
         var container = document.getElementById('batch-payment-student-ids');
 
-        console.log('[goToPaymentPage] countEl:', countEl, 'amountEl:', amountEl, 'notesEl:', notesEl, 'summaryEl:', summaryEl, 'container:', container);
-
         if (!countEl || !amountEl || !notesEl || !summaryEl || !container) {
-            console.error('[goToPaymentPage] 缴费模态框元素缺失，请检查页面是否正确加载');
             alert('系统错误：缴费窗口未能正确加载，请刷新页面后重试');
             return;
         }
@@ -430,7 +425,8 @@
             container.appendChild(input);
         });
 
-        // 关闭编辑模态框
+        // 关闭编辑模态框（先让按钮失去焦点，避免aria-hidden警告）
+        if (document.activeElement) document.activeElement.blur();
         var editModalEl = document.getElementById('batchEditModal');
         var editModal = bootstrap.Modal.getInstance(editModalEl);
         if (editModal) {
@@ -441,15 +437,12 @@
         editModalEl.addEventListener('hidden.bs.modal', function handler() {
             editModalEl.removeEventListener('hidden.bs.modal', handler);
             var paymentModalEl = document.getElementById('batchPaymentModal');
-            console.log('[goToPaymentPage] paymentModalEl:', paymentModalEl);
             if (!paymentModalEl) {
-                console.error('[goToPaymentPage] batchPaymentModal 元素不存在！');
                 alert('系统错误：缴费窗口未找到，请刷新页面后重试');
                 return;
             }
             var paymentModal = bootstrap.Modal.getOrCreateInstance(paymentModalEl);
             paymentModal.show();
-            console.log('[goToPaymentPage] 缴费模态框已打开');
         });
     }
 
