@@ -237,13 +237,11 @@
                 </h5>
                 <button type="button" class="btn-close" onclick="closeBatchEditModal()" aria-label="关闭"></button>
             </div>
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div id="selected-student-ids"></div>
-
             <!-- 页面1：修改信息 -->
             <div id="batch-page-edit">
             <form method="POST" action="{{ url_for('students.batch_edit') }}" id="batch-edit-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div id="selected-student-ids"></div>
                 <div class="modal-body">
                     <div class="alert alert-info mb-3">
                         <i class="bi bi-info-circle me-1"></i>
@@ -280,16 +278,16 @@
                     </div>
 
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeBatchEditModal()">取消</button>
-                    <button type="button" class="btn btn-success" id="btn-switch-payment">
-                        <i class="bi bi-cash-coin me-1"></i>批量缴费
-                    </button>
-                    <button type="button" class="btn btn-primary" onclick="submitBatchEdit()">
-                        <i class="bi bi-check-lg me-1"></i>确认修改
-                    </button>
-                </div>
             </form>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeBatchEditModal()">取消</button>
+                <button type="button" class="btn btn-success" onclick="switchToPaymentPage()">
+                    <i class="bi bi-cash-coin me-1"></i>批量缴费
+                </button>
+                <button type="button" class="btn btn-primary" onclick="submitBatchEdit()">
+                    <i class="bi bi-check-lg me-1"></i>确认修改
+                </button>
+            </div>
             </div>
 
             <!-- 页面2：批量缴费 -->
@@ -366,12 +364,7 @@
         cb.addEventListener('change', updateSelectedCount);
     });
 
-    // 批量缴费按钮点击
-    document.getElementById('btn-switch-payment').addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        switchToPaymentPage();
-    });
+    // 批量缴费按钮点击 - 使用内联 onclick，见 HTML 中 switchToPaymentPage()
     
     // 批量退房
     function batchCheckout() {
@@ -384,6 +377,7 @@
     }
     
     // 批量修改信息
+    var batchEditModalInstance = null;
     function openBatchEditModal() {
         const selected = document.querySelectorAll('.student-checkbox:checked');
         if (selected.length === 0) {
@@ -397,42 +391,32 @@
             countElement.textContent = selected.length;
         }
         
-        // 显示模态框
+        // 重置到修改信息页面
+        document.getElementById('batch-page-edit').style.display = '';
+        document.getElementById('batch-page-payment').style.display = 'none';
+        document.getElementById('batch-modal-title').textContent = '批量修改学生信息';
+        
+        // 使用 Bootstrap JS API 显示模态框
         const modalElement = document.getElementById('batchEditModal');
-        if (modalElement) {
-            modalElement.classList.add('show');
-            modalElement.style.display = 'block';
-            document.body.classList.add('modal-open');
-            
-            // 添加背景遮罩
-            let backdrop = document.querySelector('.modal-backdrop');
-            if (!backdrop) {
-                backdrop = document.createElement('div');
-                backdrop.className = 'modal-backdrop fade show';
-                document.body.appendChild(backdrop);
-            }
-        }
+        batchEditModalInstance = new bootstrap.Modal(modalElement, { backdrop: true, keyboard: true });
+        batchEditModalInstance.show();
     }
     
     // 关闭模态框
     function closeBatchEditModal() {
         var modalElement = document.getElementById('batchEditModal');
-        if (modalElement) {
-            modalElement.classList.remove('show');
-            modalElement.style.display = 'none';
-            document.body.classList.remove('modal-open');
-
-            // 移除背景遮罩
-            var backdrop = document.querySelector('.modal-backdrop');
-            if (backdrop) {
-                backdrop.remove();
+        if (batchEditModalInstance) {
+            batchEditModalInstance.hide();
+        } else {
+            var instance = bootstrap.Modal.getInstance(modalElement);
+            if (instance) {
+                instance.hide();
             }
-
-            // 重置回修改信息页面
-            document.getElementById('batch-page-edit').style.display = '';
-            document.getElementById('batch-page-payment').style.display = 'none';
-            document.getElementById('batch-modal-title').textContent = '批量修改学生信息';
         }
+        // 重置回修改信息页面
+        document.getElementById('batch-page-edit').style.display = '';
+        document.getElementById('batch-page-payment').style.display = 'none';
+        document.getElementById('batch-modal-title').textContent = '批量修改学生信息';
     }
     
     // 提交批量修改表单
