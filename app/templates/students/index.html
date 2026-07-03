@@ -233,13 +233,17 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="batchEditModalLabel">
-                    <i class="bi bi-pencil-square me-2"></i>批量修改学生信息
+                    <i class="bi bi-pencil-square me-2"></i><span id="batch-modal-title">批量修改学生信息</span>
                 </h5>
                 <button type="button" class="btn-close" onclick="closeBatchEditModal()" aria-label="关闭"></button>
             </div>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div id="selected-student-ids"></div>
+
+            <!-- 页面1：修改信息 -->
+            <div id="batch-page-edit">
             <form method="POST" action="{{ url_for('students.batch_edit') }}" id="batch-edit-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div id="selected-student-ids"></div>
                 <div class="modal-body">
                     <div class="alert alert-info mb-3">
                         <i class="bi bi-info-circle me-1"></i>
@@ -278,7 +282,7 @@
                     <hr>
                     <div class="mb-0">
                         <label class="form-label text-muted mb-2">其他操作</label>
-                        <button type="button" class="btn btn-success btn-sm" onclick="openBatchPaymentFromEdit()">
+                        <button type="button" class="btn btn-success btn-sm" onclick="switchToPaymentPage()">
                             <i class="bi bi-cash-coin me-1"></i>批量缴费
                         </button>
                         <small class="text-muted ms-2">为选中的学生添加缴费记录</small>
@@ -291,6 +295,55 @@
                     </button>
                 </div>
             </form>
+            </div>
+
+            <!-- 页面2：批量缴费 -->
+            <div id="batch-page-payment" style="display:none;">
+                <form method="POST" action="{{ url_for('students.batch_payment_selected') }}" id="batch-payment-selected-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div id="batch-payment-student-ids"></div>
+                    <div class="modal-body">
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-cash-coin me-1"></i>
+                            将为选中的 <strong><span id="batch-payment-count">0</span></strong> 名学生添加缴费记录
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="bp_amount" class="form-label">缴费金额（元/人）</label>
+                            <input type="number" step="0.01" min="0" class="form-control" id="bp_amount" name="payment_amount" required oninput="updateBatchPaymentTotal()">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="bp_method" class="form-label">支付方式</label>
+                            <select class="form-select" id="bp_method" name="payment_method">
+                                <option value="现金">现金</option>
+                                <option value="银行卡">银行卡</option>
+                                <option value="转账">转账</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="bp_notes" class="form-label">备注（选填）</label>
+                            <input type="text" class="form-control" id="bp_notes" name="payment_notes" placeholder="如：2025学年房费">
+                        </div>
+
+                        <div class="alert alert-success mb-0" id="bp-total-summary" style="display:none;">
+                            <i class="bi bi-calculator me-1"></i>
+                            总计：<strong>¥<span id="bp-total-amount">0.00</span></strong>（<span id="bp-student-count">0</span> 人 × ¥<span id="bp-unit-amount">0.00</span>）
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" onclick="switchToEditPage()">
+                            <i class="bi bi-arrow-left me-1"></i>返回
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="closeBatchEditModal()">取消</button>
+                        <button type="button" class="btn btn-success" onclick="submitBatchPaymentFromSelection()">
+                            <i class="bi bi-check-lg me-1"></i>确认缴费
+                        </button>
+                    </div>
+                </form>
+            </div>
+
         </div>
     </div>
 </div>
@@ -361,17 +414,22 @@
     
     // 关闭模态框
     function closeBatchEditModal() {
-        const modalElement = document.getElementById('batchEditModal');
+        var modalElement = document.getElementById('batchEditModal');
         if (modalElement) {
             modalElement.classList.remove('show');
             modalElement.style.display = 'none';
             document.body.classList.remove('modal-open');
-            
+
             // 移除背景遮罩
-            const backdrop = document.querySelector('.modal-backdrop');
+            var backdrop = document.querySelector('.modal-backdrop');
             if (backdrop) {
                 backdrop.remove();
             }
+
+            // 重置回修改信息页面
+            document.getElementById('batch-page-edit').style.display = '';
+            document.getElementById('batch-page-payment').style.display = 'none';
+            document.getElementById('batch-modal-title').textContent = '批量修改学生信息';
         }
     }
     
@@ -410,66 +468,47 @@
         }
     }
 
-    // ===== 从批量修改发起批量缴费 =====
-    function openBatchPaymentFromEdit() {
-        const selected = document.querySelectorAll('.student-checkbox:checked');
+    // ===== 批量修改 ↔ 批量缴费 页面切换 =====
+    function switchToPaymentPage() {
+        var selected = document.querySelectorAll('.student-checkbox:checked');
         if (selected.length === 0) {
             alert('请先选择学生');
             return;
         }
 
-        // 填充缴费模态框
+        // 填充缴费页数据
         document.getElementById('batch-payment-count').textContent = selected.length;
         document.getElementById('bp_amount').value = '';
         document.getElementById('bp_notes').value = '';
         document.getElementById('bp-total-summary').style.display = 'none';
 
-        // 将选中学生ID写入隐藏字段
-        const container = document.getElementById('batch-payment-student-ids');
+        // 将选中学生ID写入缴费表单隐藏字段
+        var container = document.getElementById('batch-payment-student-ids');
         container.innerHTML = '';
         selected.forEach(function(cb) {
-            const input = document.createElement('input');
+            var input = document.createElement('input');
             input.type = 'hidden';
             input.name = 'student_ids';
             input.value = cb.value;
             container.appendChild(input);
         });
 
-        // 先隐藏批量修改模态框（保留backdrop，不触发body样式变化）
-        var editModal = document.getElementById('batchEditModal');
-        editModal.classList.remove('show');
-        editModal.style.display = 'none';
-
-        // 延迟150ms后显示缴费模态框，确保DOM渲染完成
-        setTimeout(function() {
-            var payModal = document.getElementById('batchPaymentFromEditModal');
-            payModal.classList.add('show');
-            payModal.style.display = 'block';
-            document.body.classList.add('modal-open');
-            // 确保有backdrop
-            if (!document.querySelector('.modal-backdrop')) {
-                var backdrop = document.createElement('div');
-                backdrop.className = 'modal-backdrop fade show';
-                document.body.appendChild(backdrop);
-            }
-        }, 150);
+        // 切换页面
+        document.getElementById('batch-page-edit').style.display = 'none';
+        document.getElementById('batch-page-payment').style.display = '';
+        document.getElementById('batch-modal-title').textContent = '批量缴费';
     }
 
-    function closeBatchPaymentFromEdit() {
-        const modal = document.getElementById('batchPaymentFromEditModal');
-        if (modal) {
-            modal.classList.remove('show');
-            modal.style.display = 'none';
-            document.body.classList.remove('modal-open');
-            const backdrop = document.querySelector('.modal-backdrop');
-            if (backdrop) backdrop.remove();
-        }
+    function switchToEditPage() {
+        document.getElementById('batch-page-payment').style.display = 'none';
+        document.getElementById('batch-page-edit').style.display = '';
+        document.getElementById('batch-modal-title').textContent = '批量修改学生信息';
     }
 
     function updateBatchPaymentTotal() {
-        const amount = parseFloat(document.getElementById('bp_amount').value) || 0;
-        const count = parseInt(document.getElementById('batch-payment-count').textContent) || 0;
-        const total = amount * count;
+        var amount = parseFloat(document.getElementById('bp_amount').value) || 0;
+        var count = parseInt(document.getElementById('batch-payment-count').textContent) || 0;
+        var total = amount * count;
         document.getElementById('bp-unit-amount').textContent = amount.toFixed(2);
         document.getElementById('bp-student-count').textContent = count;
         document.getElementById('bp-total-amount').textContent = total.toFixed(2);
@@ -477,13 +516,13 @@
     }
 
     function submitBatchPaymentFromSelection() {
-        const amount = parseFloat(document.getElementById('bp_amount').value) || 0;
+        var amount = parseFloat(document.getElementById('bp_amount').value) || 0;
         if (amount <= 0) {
             alert('请输入缴费金额');
             return;
         }
-        const count = parseInt(document.getElementById('batch-payment-count').textContent) || 0;
-        const total = amount * count;
+        var count = parseInt(document.getElementById('batch-payment-count').textContent) || 0;
+        var total = amount * count;
         if (!confirm('确认缴费？\n\n' + count + ' 名学生 × ¥' + amount.toFixed(2) + ' = ¥' + total.toFixed(2))) {
             return;
         }
@@ -629,60 +668,6 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-primary" onclick="submitBatchCheckoutDate()">确认退房</button>
             </div>
-        </div>
-    </div>
-</div>
-
-<!-- 从批量修改发起的批量缴费模态框 -->
-<div class="modal fade" id="batchPaymentFromEditModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-cash-coin me-2"></i>批量缴费
-                </h5>
-                <button type="button" class="btn-close" onclick="closeBatchPaymentFromEdit()" aria-label="关闭"></button>
-            </div>
-            <form method="POST" action="{{ url_for('students.batch_payment_selected') }}" id="batch-payment-selected-form">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div id="batch-payment-student-ids"></div>
-                <div class="modal-body">
-                    <div class="alert alert-info mb-3">
-                        <i class="bi bi-info-circle me-1"></i>
-                        将为选中的 <strong><span id="batch-payment-count">0</span></strong> 名学生添加缴费记录
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="bp_amount" class="form-label">缴费金额（元/人）</label>
-                        <input type="number" step="0.01" min="0" class="form-control" id="bp_amount" name="payment_amount" required oninput="updateBatchPaymentTotal()">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="bp_method" class="form-label">支付方式</label>
-                        <select class="form-select" id="bp_method" name="payment_method">
-                            <option value="现金">现金</option>
-                            <option value="银行卡">银行卡</option>
-                            <option value="转账">转账</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="bp_notes" class="form-label">备注（选填）</label>
-                        <input type="text" class="form-control" id="bp_notes" name="payment_notes" placeholder="如：2025学年房费">
-                    </div>
-
-                    <div class="alert alert-success mb-0" id="bp-total-summary" style="display:none;">
-                        <i class="bi bi-calculator me-1"></i>
-                        总计：<strong>¥<span id="bp-total-amount">0.00</span></strong>（<span id="bp-student-count">0</span> 人 × ¥<span id="bp-unit-amount">0.00</span>）
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeBatchPaymentFromEdit()">取消</button>
-                    <button type="button" class="btn btn-success" onclick="submitBatchPaymentFromSelection()">
-                        <i class="bi bi-check-lg me-1"></i>确认缴费
-                    </button>
-                </div>
-            </form>
         </div>
     </div>
 </div>
