@@ -383,6 +383,47 @@ class Student(db.Model):
         return fee_std.add_billing_days(self.check_in_date, billing_days)
     
     
+    def calculate_remaining_refund(self):
+        """计算剩余可退金额
+        
+        逻辑（学年制：跳过2月8月）：
+        1. 计算基础已缴金额（不含假期附加费）可覆盖的总计费天数
+        2. 计算从入住到退房日期（或今天）的已消费计费天数
+        3. 剩余天数 = 已缴天数 - 已消费天数
+        4. 退款金额 = (剩余天数 / 单位天数) * 单价
+        """
+        if not self.fee_standard_id or not self.check_in_date:
+            return 0
+        
+        fee_std = FeeStandard.query.get(self.fee_standard_id)
+        if not fee_std or fee_std.price <= 0:
+            return 0
+        
+        base_paid = self.calculate_base_paid()
+        if base_paid <= 0:
+            return 0
+        
+        unit_days = fee_std.get_unit_days()
+        
+        # 已缴费可覆盖的总计费天数
+        total_paid_days = (base_paid / fee_std.price) * unit_days
+        
+        # 已消费计费天数（学年制跳过2月8月）
+        today = date.today()
+        end_date = self.check_out_date if self.check_out_date and self.check_out_date < today else today
+        consumed_days = fee_std.count_billing_days(self.check_in_date, end_date)
+        
+        # 剩余天数
+        remaining_days = max(0, total_paid_days - consumed_days)
+        
+        if remaining_days <= 0:
+            return 0
+        
+        # 退款金额 = 剩余天数对应的费用
+        refund_amount = (remaining_days / unit_days) * fee_std.price
+        
+        return round(refund_amount, 2)
+    
     def get_remaining_days_info(self):
         """获取剩余天数详细信息，用于页面展示"""
         if not self.fee_standard_id or not self.check_in_date:
