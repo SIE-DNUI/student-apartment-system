@@ -343,9 +343,12 @@ class Student(db.Model):
         
         遍历缴费记录，只统计非假期费（unit != '次'）的缴费金额。
         退费记录会扣减对应的金额。
+        兼容历史数据：若无缴费记录但 total_paid > 0，则直接使用 total_paid。
         """
         base_paid = 0
+        has_records = False
         for record in self.fee_records.order_by(FeeRecord.payment_date).all():
+            has_records = True
             if record.record_type == 'refund':
                 base_paid -= abs(record.amount)
             else:
@@ -355,6 +358,9 @@ class Student(db.Model):
                     is_holiday = True
                 if not is_holiday:
                     base_paid += record.amount
+        # 兼容历史数据：没有缴费记录但 total_paid 有值时，直接使用 total_paid
+        if not has_records and (self.total_paid or 0) > 0:
+            return self.total_paid
         return max(0, base_paid)
     
     def calculate_auto_due_date(self):
