@@ -577,15 +577,11 @@ def switch_room(id):
                 FeeStandard.id != student.fee_standard_id
             ).all()
             
-            # 获取可选房间（有空床位 + 非维护中 + 匹配新收费标准）
-            new_fee_std = FeeStandard.query.get(new_fee_standard_id)
-            available_rooms = []
-            if new_fee_std:
-                available_rooms = Room.query.filter(
-                    Room.fee_standard_id == new_fee_standard_id,
-                    Room.status != 'maintenance',
-                    Room.current_occupancy < Room.capacity
-                ).order_by(Room.building, Room.room_number).all()
+            # 获取可选房间（所有有空床位的房间，不绑定收费标准过滤）
+            available_rooms = Room.query.filter(
+                Room.status != 'maintenance',
+                Room.current_occupancy < Room.capacity
+            ).order_by(Room.building, Room.room_number).all()
             
             return render_template('students/switch_room.html',
                                  title=f'{student.name} - 换房型',
