@@ -392,11 +392,15 @@ class Student(db.Model):
     def calculate_remaining_refund(self):
         """计算剩余可退金额
         
-        逻辑（学年制：跳过2月8月）：
-        1. 计算基础已缴金额（不含假期附加费）可覆盖的总计费天数
-        2. 计算从入住到退房日期（或今天）的已消费计费天数
-        3. 剩余天数 = 已缴天数 - 已消费天数
-        4. 退款金额 = (剩余天数 / 单位天数) * 单价
+        两种模式：
+        A. 手动到期日期模式：以手动日期为账单截止日，按日费率均摊计算
+           - 日费率 = 已缴金额 / 入住到手动到期日的计费天数
+           - 剩余 = 已缴金额 - 日费率 × 已消费计费天数
+        B. 自动模式（无手动日期）：按收费标准单位价格计算
+           - 剩余天数 = 已缴可覆盖天数 - 已消费天数
+           - 退款 = (剩余天数 / 单位天数) × 单价
+        
+        学年制：跳过2月8月
         """
         if not self.fee_standard_id or not self.check_in_date:
             return 0
@@ -409,29 +413,38 @@ class Student(db.Model):
         if base_paid <= 0:
             return 0
         
-        unit_days = fee_std.get_unit_days()
-        
-        # 已缴费可覆盖的总计费天数
-        total_paid_days = (base_paid / fee_std.price) * unit_days
-        
-        # 已消费计费天数（学年制跳过2月8月）
         today = date.today()
         end_date = self.check_out_date if self.check_out_date and self.check_out_date < today else today
-        consumed_days = fee_std.count_billing_days(self.check_in_date, end_date)
         
-        # 剩余天数
-        remaining_days = max(0, total_paid_days - consumed_days)
-        
-        if remaining_days <= 0:
-            return 0
-        
-        # 退款金额 = 剩余天数对应的费用
-        refund_amount = (remaining_days / unit_days) * fee_std.price
-        
-        return round(refund_amount, 2)
+        # 判断是否使用手动到期日期模式
+        if self.payment_due_date:
+            # 模式A：手动到期日期 → 按日费率均摊
+            total_billing_days = fee_std.count_billing_days(self.check_in_date, self.payment_due_date)
+            if total_billing_days <= 0:
+                return 0
+            daily_rate = base_paid / total_billing_days
+            consumed_days = fee_std.count_billing_days(self.check_in_date, end_date)
+            consumed_amount = daily_rate * consumed_days
+            remaining = max(0, base_paid - consumed_amount)
+            return round(remaining, 2)
+        else:
+            # 模式B：自动模式 → 按单位价格计算
+            unit_days = fee_std.get_unit_days()
+            total_paid_days = (base_paid / fee_std.price) * unit_days
+            consumed_days = fee_std.count_billing_days(self.check_in_date, end_date)
+            remaining_days = max(0, total_paid_days - consumed_days)
+            if remaining_days <= 0:
+                return 0
+            refund_amount = (remaining_days / unit_days) * fee_std.price
+            return round(refund_amount, 2)
     
     def get_remaining_days_info(self):
-        """获取剩余天数详细信息，用于页面展示"""
+        """获取剩余天数详细信息，用于页面展示
+        
+        两种模式：
+        A. 手动到期日期模式：以手动日期为账单截止日，按日费率均摊
+        B. 自动模式：按收费标准单位价格计算
+        """
         if not self.fee_standard_id or not self.check_in_date:
             return None
         
@@ -443,26 +456,43 @@ class Student(db.Model):
         if base_paid <= 0:
             return None
         
-        unit_days = fee_std.get_unit_days()
-        
-        # 已缴费可覆盖的总计费天数
-        total_paid_days = (base_paid / fee_std.price) * unit_days
-        
-        # 已消费计费天数（学年制跳过2月8月）
         today = date.today()
         end_date = self.check_out_date if self.check_out_date and self.check_out_date < today else today
         consumed_days = fee_std.count_billing_days(self.check_in_date, end_date)
         
-        # 剩余天数
-        remaining_days = total_paid_days - consumed_days
-        
-        return {
-            'total_paid_days': round(total_paid_days, 1),
-            'consumed_days': consumed_days,
-            'remaining_days': round(remaining_days, 1),
-            'refund_amount': self.calculate_remaining_refund(),
-            'is_academic_year': fee_std.is_academic_year(),
-        }
+        # 判断是否使用手动到期日期模式
+        if self.payment_due_date:
+            # 模式A：手动到期日期 → 按日费率均摊
+            total_billing_days = fee_std.count_billing_days(self.check_in_date, self.payment_due_date)
+            if total_billing_days <= 0:
+                return None
+            daily_rate = base_paid / total_billing_days
+            consumed_amount = daily_rate * consumed_days
+            remaining_amount = max(0, base_paid - consumed_amount)
+            remaining_equivalent_days = remaining_amount / daily_rate if daily_rate > 0 else 0
+            return {
+                'total_paid_days': round(total_billing_days, 1),
+                'consumed_days': consumed_days,
+                'remaining_days': round(remaining_equivalent_days, 1),
+                'refund_amount': round(remaining_amount, 2),
+                'is_academic_year': fee_std.is_academic_year(),
+                'is_manual_due_date': True,
+                'effective_due_date': self.payment_due_date.strftime('%Y-%m-%d'),
+            }
+        else:
+            # 模式B：自动模式 → 按单位价格计算
+            unit_days = fee_std.get_unit_days()
+            total_paid_days = (base_paid / fee_std.price) * unit_days
+            remaining_days = total_paid_days - consumed_days
+            return {
+                'total_paid_days': round(total_paid_days, 1),
+                'consumed_days': consumed_days,
+                'remaining_days': round(remaining_days, 1),
+                'refund_amount': self.calculate_remaining_refund(),
+                'is_academic_year': fee_std.is_academic_year(),
+                'is_manual_due_date': False,
+                'effective_due_date': self.calculate_auto_due_date().strftime('%Y-%m-%d') if self.calculate_auto_due_date() else None,
+            }
     
     def preview_room_switch(self, new_fee_standard_id, switch_date):
         """预览换房型/收费标准的费用结算

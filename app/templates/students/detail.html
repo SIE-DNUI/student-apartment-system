@@ -142,6 +142,9 @@
                         {% if remaining_info and remaining_info.remaining_days > 0 %}
                         <h4 class="mb-1">¥{{ "%.2f"|format(remaining_info.refund_amount) }}</h4>
                         <small>约 {{ remaining_info.remaining_days|round(1) }} 天</small>
+                        {% if remaining_info.is_manual_due_date %}
+                        <br><small class="badge bg-warning text-dark mt-1" style="font-size:0.7rem;">按手动到期日计算</small>
+                        {% endif %}
                         {% elif remaining_info %}
                         <h4 class="mb-0">¥0.00</h4>
                         <small>已消费 ¥{{ "%.2f"|format(student.total_paid or 0) }}</small>
