@@ -109,15 +109,25 @@
             <input type="hidden" name="switch_date" value="{{ preview.switch_date }}">
 
             <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">选择新房间（可选，不选则仅更换收费标准）</label>
-                    <select name="new_room_id" class="form-select">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">选择楼栋</label>
+                    <select id="building-select" class="form-select">
                         <option value="">-- 不更换房间 --</option>
+                        {% set buildings = [] %}
                         {% for room in available_rooms %}
-                        <option value="{{ room.id }}">
-                            {{ room.building }}-{{ room.room_number }}（楼层{{ room.floor or '-' }}，剩余 {{ room.available_beds }} 床位）
-                        </option>
+                            {% if room.building not in buildings %}
+                                {% set _ = buildings.append(room.building) %}
+                            {% endif %}
                         {% endfor %}
+                        {% for building in buildings|sort %}
+                        <option value="{{ building }}">{{ building }} 楼</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label fw-bold">选择房间</label>
+                    <select id="room-select" name="new_room_id" class="form-select" disabled>
+                        <option value="">-- 请先选择楼栋 --</option>
                     </select>
                 </div>
             </div>
@@ -129,4 +139,46 @@
         {% endif %}
     </div>
 </div>
+
+{% if preview and available_rooms %}
+<script>
+// 房间数据（按楼栋分组）
+const roomsData = [
+    {% for room in available_rooms %}
+    {
+        id: {{ room.id }},
+        building: '{{ room.building }}',
+        room_number: '{{ room.room_number }}',
+        floor: {{ room.floor or 'null' }},
+        available_beds: {{ room.capacity - room.current_occupancy }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+const buildingSelect = document.getElementById('building-select');
+const roomSelect = document.getElementById('room-select');
+
+buildingSelect.addEventListener('change', function() {
+    const selectedBuilding = this.value;
+    roomSelect.innerHTML = '';
+    
+    if (!selectedBuilding) {
+        roomSelect.innerHTML = '<option value="">-- 不更换房间 --</option>';
+        roomSelect.disabled = true;
+        return;
+    }
+    
+    roomSelect.disabled = false;
+    roomSelect.innerHTML = '<option value="">-- 请选择房间 --</option>';
+    
+    const filteredRooms = roomsData.filter(r => r.building === selectedBuilding);
+    filteredRooms.forEach(function(room) {
+        const option = document.createElement('option');
+        option.value = room.id;
+        option.textContent = room.room_number + ' 号房（' + room.floor + '层，剩余 ' + room.available_beds + ' 床位）';
+        roomSelect.appendChild(option);
+    });
+});
+</script>
+{% endif %}
 {% endblock %}
