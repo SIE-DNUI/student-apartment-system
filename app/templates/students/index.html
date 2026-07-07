@@ -481,8 +481,9 @@
         const checkOutDate = document.getElementById('batch_check_out_date').value;
         const residencePermit = document.getElementById('batch_residence_permit_expiry').value;
         const department = document.getElementById('batch_department').value;
+        const paymentDueDate = document.getElementById('batch_payment_due_date').value;
         
-        if (!major && !checkInDate && !checkOutDate && !residencePermit && !department) {
+        if (!major && !checkInDate && !checkOutDate && !residencePermit && !department && !paymentDueDate) {
             alert('请至少填写一项要修改的信息');
             return;
         }
