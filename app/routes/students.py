@@ -462,6 +462,13 @@ def batch_edit():
                 except:
                     pass
             
+            payment_due_date = request.form.get('payment_due_date', '').strip()
+            if payment_due_date:
+                try:
+                    student.payment_due_date = datetime.strptime(payment_due_date, '%Y-%m-%d').date()
+                except:
+                    pass
+            
             count += 1
     
     db.session.commit()
