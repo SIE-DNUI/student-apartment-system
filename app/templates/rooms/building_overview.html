@@ -4,24 +4,113 @@
 
 {% block content %}
 <style>
+    /* ============ 平面图样式 ============ */
+    .floor-plan-wrap {
+        display: flex;
+        justify-content: center;
+        padding: 12px;
+        overflow-x: auto;
+    }
+    .floor-plan {
+        display: grid;
+        gap: 3px;
+        /* 列数和行数由内联style设置 */
+    }
+    .plan-cell {
+        border-radius: 4px;
+        padding: 3px 2px;
+        text-align: center;
+        font-size: 0.7rem;
+        line-height: 1.2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        box-sizing: border-box;
+    }
+    /* 房间格子颜色 */
+    .plan-cell.room-empty   { background-color: #f1f3f5; border: 1px solid #dee2e6; color: #868e96; }
+    .plan-cell.room-partial { background-color: #fff3cd; border: 1px solid #ffc107; color: #856404; }
+    .plan-cell.room-full    { background-color: #d1e7dd; border: 1px solid #198754; color: #0f5132; }
+    .plan-cell.room-reserved{ background-color: #f8f9fa; border: 1px dashed #adb5bd; color: #adb5bd; }
+    /* 功能区 */
+    .plan-cell.corridor     { background-color: #e7f1ff; border: 1px solid #b6d4fe; color: #084298; font-weight: 600; }
+    .plan-cell.stairs       { background-color: #e2e3e5; border: 1px solid #b1bbc8; color: #41464b; font-weight: 600; }
+    .plan-cell.function     { background-color: #e2e3e5; border: 1px solid #b1bbc8; color: #41464b; font-weight: 600; }
+
+    .plan-cell .room-num {
+        font-weight: bold;
+        font-size: 0.72rem;
+        text-decoration: none;
+        color: inherit;
+    }
+    .plan-cell .room-type-badge {
+        font-size: 0.6rem;
+        padding: 0 3px;
+        border-radius: 3px;
+        margin-top: 1px;
+    }
+    .plan-cell .occupant-list {
+        font-size: 0.62rem;
+        line-height: 1.15;
+        margin-top: 1px;
+    }
+    .plan-cell .occupant-list a {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+    .plan-cell .empty-beds-badge {
+        font-size: 0.6rem;
+        margin-top: 1px;
+    }
+    .plan-cell.reserved-label {
+        font-size: 0.58rem;
+        color: #adb5bd;
+    }
+
+    /* 楼层分隔 */
+    .floor-block {
+        margin-bottom: 16px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        overflow: hidden;
+    }
+    .floor-block-header {
+        background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+        color: #fff;
+        padding: 6px 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.85rem;
+    }
+    .floor-block-header .floor-stats-inline span {
+        margin-left: 10px;
+        font-size: 0.75rem;
+    }
+
+    /* ============ 表格视图样式 ============ */
     .overview-table { font-size: 0.75rem; }
     .overview-table th, .overview-table td { padding: 0.25rem 0.3rem; vertical-align: middle; }
     .room-cell { min-width: 65px; max-width: 75px; }
     .room-cell.empty { background-color: #f8f9fa; }
     .room-cell.partial { background-color: #fff3cd; }
     .room-cell.full { background-color: #d1e7dd; }
-    .room-num { font-weight: bold; font-size: 0.8rem; }
-    .room-type { font-size: 0.65rem; }
-    .occupant { font-size: 0.7rem; line-height: 1.2; }
+    .room-num-tbl { font-weight: bold; font-size: 0.8rem; }
+    .room-type-tbl { font-size: 0.65rem; }
+    .occupant-tbl { font-size: 0.7rem; line-height: 1.2; }
     .stat-cell { background-color: #e7f1ff; font-weight: bold; }
     .stat-header { background-color: #0d6efd; color: white; }
 </style>
 
 <div class="card">
     <div class="card-header bg-primary text-white py-2">
-        <div class="d-flex justify-content-between align-items-center">
-            <div class="d-flex align-items-center">
-                <h4 class="mb-0 me-3">{{ building }}房间入住时点情况</h4>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <h4 class="mb-0 me-2">{{ building }}房间入住时点情况</h4>
                 <!-- 楼栋切换 -->
                 <div class="btn-group">
                     <button type="button" class="btn btn-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
@@ -30,8 +119,8 @@
                     <ul class="dropdown-menu">
                         {% for b in buildings %}
                         <li>
-                            <a class="dropdown-item {% if b == building %}active{% endif %}" 
-                               href="{{ url_for('rooms.building_overview', building=b) }}">
+                            <a class="dropdown-item {% if b == building %}active{% endif %}"
+                               href="{{ url_for('rooms.building_overview', building=b, view=view) }}">
                                 {{ b }}
                             </a>
                         </li>
@@ -39,26 +128,133 @@
                     </ul>
                 </div>
             </div>
-            <div>
-                <span class="badge bg-light text-dark me-2">总房间: {{ stats.total }}</span>
-                <span class="badge bg-success me-2">已满: {{ stats.full }}</span>
-                <span class="badge bg-warning text-dark me-2">有空床位: {{ stats.partial }}</span>
-                <span class="badge bg-secondary me-2">空房: {{ stats.empty }}</span>
+            <div class="d-flex flex-wrap align-items-center gap-1">
+                <span class="badge bg-light text-dark">总房间: {{ stats.total }}</span>
+                <span class="badge bg-success">已满: {{ stats.full }}</span>
+                <span class="badge bg-warning text-dark">有空床位: {{ stats.partial }}</span>
+                <span class="badge bg-secondary">空房: {{ stats.empty }}</span>
                 <span class="badge bg-info">可用床位: {{ stats.empty_beds }}</span>
             </div>
         </div>
     </div>
-    
+
     <div class="card-body p-2">
-        {% if floors_data %}
-        <!-- 一屏展示的大表 -->
-        <div class="table-responsive" style="max-height: calc(100vh - 200px);">
+        <!-- 视图切换按钮 -->
+        {% if has_plan %}
+        <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+            <div class="btn-group btn-group-sm" role="group">
+                <a href="{{ url_for('rooms.building_overview', building=building, view='plan') }}"
+                   class="btn btn-outline-primary {% if view == 'plan' %}active{% endif %}">
+                    <i class="bi bi-grid-3x3-gap me-1"></i>平面图
+                </a>
+                <a href="{{ url_for('rooms.building_overview', building=building, view='table') }}"
+                   class="btn btn-outline-primary {% if view == 'table' %}active{% endif %}">
+                    <i class="bi bi-list-ul me-1"></i>表格
+                </a>
+            </div>
+            {% if view == 'plan' %}
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="toggleNames" checked>
+                <label class="form-check-label small" for="toggleNames">显示入住人姓名</label>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- ========== 平面图视图 ========== -->
+        {% if view == 'plan' and has_plan %}
+        <div style="max-height: calc(100vh - 280px); overflow-y: auto;">
+            {% for floor in floors_sorted %}
+            {% set plan = floor_plans[floor] %}
+            <div class="floor-block">
+                <div class="floor-block-header">
+                    <div><i class="bi bi-building me-1"></i><strong>{{ floor }}F</strong></div>
+                    <div class="floor-stats-inline">
+                        <span>房间 {{ floor_stats[floor].total }}</span>
+                        <span class="text-warning">剩余房 {{ floor_stats[floor].empty_rooms }}</span>
+                        <span class="text-success">空床位 {{ floor_stats[floor].empty_beds }}</span>
+                    </div>
+                </div>
+                <div class="floor-plan-wrap">
+                    <div class="floor-plan"
+                         style="grid-template-columns: repeat({{ plan.cols }}, minmax(52px, 1fr)); grid-template-rows: repeat({{ plan.rows }}, minmax(38px, auto));">
+                        {% for cell in plan.cells %}
+                        <div class="plan-cell
+                            {% if cell.type == 'room' %}
+                                {% if not cell.exists %}room-reserved
+                                {% elif cell.is_empty %}room-empty
+                                {% elif cell.has_partial %}room-partial
+                                {% else %}room-full
+                                {% endif %}
+                            {% elif cell.type == 'corridor' %}corridor
+                            {% elif cell.type == 'stairs' %}stairs
+                            {% elif cell.type == 'function' %}function
+                            {% endif %}"
+                             style="grid-row: {{ cell.row }} / span {{ cell.rowspan }}; grid-column: {{ cell.col }} / span {{ cell.colspan }};">
+
+                            {% if cell.type == 'room' %}
+                                {% if cell.exists %}
+                                    {% if cell.is_empty or cell.has_partial %}
+                                    <a href="{{ url_for('students.add') }}?room_id={{ cell.room_id }}"
+                                       class="room-num" title="添加入住">{{ cell.room_num }}</a>
+                                    {% else %}
+                                    <a href="{{ url_for('rooms.detail', room_id=cell.room_id) }}"
+                                       class="room-num" title="查看详情">{{ cell.room_num }}</a>
+                                    {% endif %}
+
+                                    <span class="room-type-badge badge {% if cell.room_type == '单' %}bg-info{% else %}bg-secondary{% endif %}">{{ cell.room_type }}</span>
+
+                                    <div class="occupant-list occupant-names">
+                                        {% if cell.students %}
+                                            {% for student in cell.students %}
+                                            <a href="{{ url_for('students.edit', id=student.id) }}"
+                                               title="编辑{{ student.name }}">{{ student.name }}</a>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted">空</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if cell.has_partial %}
+                                    <div class="empty-beds-badge text-warning">余{{ cell.empty_beds }}床</div>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="room-num">{{ cell.room_num }}</span>
+                                    <span class="reserved-label">预留</span>
+                                {% endif %}
+                            {% else %}
+                                {{ cell.label }}
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- 平面图图例 -->
+        <div class="mt-2 p-2 bg-light rounded d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+                <span class="badge bg-secondary me-1">空房间</span>
+                <span class="badge bg-warning text-dark me-1">有空床位</span>
+                <span class="badge bg-success me-1">已满</span>
+                <span class="badge bg-light text-dark border me-1" style="border-style:dashed!important;">预留房</span>
+                <span class="badge bg-info me-1">单人间</span>
+                <span class="badge bg-secondary me-1">双人间</span>
+            </div>
+            <small class="text-muted">点击房间号操作 | 点击姓名编辑</small>
+        </div>
+
+        <!-- ========== 表格视图 ========== -->
+        {% else %}
+        <div class="table-responsive" style="max-height: calc(100vh - 250px);">
             <table class="table table-bordered overview-table mb-0">
                 <thead>
                     <tr class="text-center">
                         <th class="stat-header" style="width: 45px;">楼层</th>
-                        {% for i in range(1, 21) %}
-                        <th class="room-cell">{{ i }}</th>
+                        {% set max_rooms = floors_data.values() | map('length') | max %}
+                        {% for i in range(max_rooms) %}
+                        <th class="room-cell">{{ i + 1 }}</th>
                         {% endfor %}
                         <th class="stat-header" style="width: 50px;">房间数</th>
                         <th class="stat-header" style="width: 50px;">剩余房</th>
@@ -68,52 +264,30 @@
                 <tbody>
                     {% for floor in floors_sorted %}
                     <tr>
-                        <!-- 楼层标签 -->
                         <td class="text-center table-primary align-middle fw-bold">{{ floor }}F</td>
-                        
-                        <!-- 房间格子 -->
                         {% set floor_rooms = floors_data[floor] %}
-                        {% for i in range(20) %}
+                        {% for i in range(max_rooms) %}
                             {% set item = floor_rooms[i] if i < floor_rooms|length else none %}
                             {% if item %}
-                                {% if item.is_empty %}
-                                    {% set cell_class = 'empty' %}
-                                {% elif item.has_partial %}
-                                    {% set cell_class = 'partial' %}
-                                {% else %}
-                                    {% set cell_class = 'full' %}
-                                {% endif %}
-                                
+                                {% if item.is_empty %}{% set cell_class = 'empty' %}
+                                {% elif item.has_partial %}{% set cell_class = 'partial' %}
+                                {% else %}{% set cell_class = 'full' %}{% endif %}
                                 <td class="room-cell {{ cell_class }} text-center">
-                                    <!-- 房间号：可点击 -->
                                     {% if item.is_empty or item.has_partial %}
-                                    <a href="{{ url_for('students.add') }}?room_id={{ item.room.id }}" 
-                                       class="room-num text-decoration-none" title="添加入住">
-                                        {{ item.room.room_number }}
-                                    </a>
+                                    <a href="{{ url_for('students.add') }}?room_id={{ item.room.id }}"
+                                       class="room-num-tbl text-decoration-none" title="添加入住">{{ item.room.room_number }}</a>
                                     {% else %}
-                                    <a href="{{ url_for('rooms.detail', room_id=item.room.id) }}" 
-                                       class="room-num text-decoration-none" title="查看详情">
-                                        {{ item.room.room_number }}
-                                    </a>
+                                    <a href="{{ url_for('rooms.detail', room_id=item.room.id) }}"
+                                       class="room-num-tbl text-decoration-none" title="查看详情">{{ item.room.room_number }}</a>
                                     {% endif %}
-                                    
-                                    <!-- 房型 -->
-                                    <div class="room-type">
-                                        <span class="badge {% if item.room_type == '单' %}bg-info{% else %}bg-secondary{% endif %}">
-                                            {{ item.room_type }}
-                                        </span>
+                                    <div class="room-type-tbl">
+                                        <span class="badge {% if item.room_type == '单' %}bg-info{% else %}bg-secondary{% endif %}">{{ item.room_type }}</span>
                                     </div>
-                                    
-                                    <!-- 入住人：可点击编辑 -->
-                                    <div class="occupant">
+                                    <div class="occupant-tbl">
                                         {% if item.students %}
                                             {% for student in item.students %}
-                                            <a href="{{ url_for('students.edit', id=student.id) }}" 
-                                               class="text-decoration-none d-block"
-                                               title="编辑{{ student.name }}">
-                                                {{ student.name }}
-                                            </a>
+                                            <a href="{{ url_for('students.edit', id=student.id) }}"
+                                               class="text-decoration-none d-block" title="编辑{{ student.name }}">{{ student.name }}</a>
                                             {% endfor %}
                                         {% else %}
                                             <span class="text-muted">空</span>
@@ -124,18 +298,14 @@
                                 <td class="room-cell bg-light text-muted text-center">-</td>
                             {% endif %}
                         {% endfor %}
-                        
-                        <!-- 楼层统计 -->
                         <td class="stat-cell text-center align-middle">{{ floor_stats[floor].total }}</td>
                         <td class="stat-cell text-center align-middle bg-warning bg-opacity-25">{{ floor_stats[floor].empty_rooms }}</td>
                         <td class="stat-cell text-center align-middle bg-success bg-opacity-25">{{ floor_stats[floor].empty_beds }}</td>
                     </tr>
                     {% endfor %}
-                    
-                    <!-- 总计行 -->
                     <tr class="table-dark text-center fw-bold">
                         <td>合计</td>
-                        <td colspan="20"></td>
+                        <td colspan="{{ max_rooms }}"></td>
                         <td class="table-info">{{ stats.total }}</td>
                         <td class="table-warning">{{ stats.empty }}</td>
                         <td class="table-success">{{ stats.empty_beds }}</td>
@@ -143,8 +313,7 @@
                 </tbody>
             </table>
         </div>
-        
-        <!-- 图例 -->
+        {% if has_plan %}
         <div class="mt-2 p-2 bg-light rounded d-flex justify-content-between align-items-center">
             <div>
                 <span class="badge bg-secondary me-1">空房间</span>
@@ -153,18 +322,28 @@
                 <span class="badge bg-info me-1">单人间</span>
                 <span class="badge bg-secondary me-1">双人间</span>
             </div>
-            <small class="text-muted">
-                点击房间号操作 | 点击姓名编辑
-            </small>
+            <small class="text-muted">点击房间号操作 | 点击姓名编辑</small>
         </div>
-        {% else %}
-        <div class="text-center py-5 text-muted">
-            <i class="bi bi-inbox display-4"></i>
-            <p class="mt-2">该楼栋暂无房间数据</p>
-            <p>当前楼栋: {{ building }}</p>
-            <p>可用楼栋: {{ buildings|join(', ') }}</p>
-        </div>
+        {% endif %}
         {% endif %}
     </div>
 </div>
+
+{% if view == 'plan' and has_plan %}
+<script>
+// 紧凑模式/显示姓名切换
+(function() {
+    var toggle = document.getElementById('toggleNames');
+    if (!toggle) return;
+    // 默认显示姓名（开关默认checked）
+    function apply() {
+        var show = toggle.checked;
+        document.querySelectorAll('.occupant-names').forEach(function(el) {
+            el.style.display = show ? '' : 'none';
+        });
+    }
+    toggle.addEventListener('change', apply);
+})();
+</script>
+{% endif %}
 {% endblock %}

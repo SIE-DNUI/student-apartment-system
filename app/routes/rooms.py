@@ -11,6 +11,7 @@ from wtforms.validators import DataRequired, Optional, NumberRange
 from app.models import db
 from app.models import Room, FeeStandard, Student
 from app.decorators import permission_required
+from app.floor_layouts import LAYOUTS, detect_tower, get_layout
 import io
 
 bp = Blueprint('rooms', __name__, url_prefix='/rooms')
@@ -425,94 +426,130 @@ def overview():
         return redirect(url_for('rooms.index'))
 
 
+def _build_room_info(room):
+    """构建单个房间的入住信息（供平面图和表格视图共用）"""
+    active_students = Student.query.filter_by(
+        room_id=room.id, status='active'
+    ).all()
+    total_beds = room.capacity
+    occupied_beds = sum(s.bed_occupancy for s in active_students)
+    empty_beds = total_beds - occupied_beds
+    if active_students:
+        room_type = '单' if any(s.bed_occupancy == 2 for s in active_students) else '双'
+    else:
+        room_type = '双'
+    return {
+        'room': room,
+        'students': active_students,
+        'empty_beds': empty_beds,
+        'room_type': room_type,
+        'is_empty': len(active_students) == 0,
+        'has_partial': len(active_students) > 0 and empty_beds > 0
+    }
+
+
 @bp.route('/building/<building>/overview')
 @login_required
 def building_overview(building):
-    """楼栋房间入住情况一览表"""
-    # 获取该楼栋所有房间
+    """楼栋房间入住情况一览表（支持平面图和表格两种视图）"""
+    import re as _re
+    view = request.args.get('view', 'plan')  # plan=平面图(默认), table=表格
+
     rooms = Room.query.filter_by(building=building).order_by(Room.floor, Room.room_number).all()
-    
+
     if not rooms:
         flash(f'楼栋 {building} 不存在或暂无房间', 'warning')
         return redirect(url_for('rooms.index'))
-    
-    # 按楼层分组组织数据
+
+    buildings = [b[0] for b in db.session.query(Room.building).distinct().order_by(Room.building).all()]
+
+    # 按楼层分组
     floors_data = {}
+    room_info_map = {}
     for room in rooms:
         floor = room.floor or 0
-        if floor not in floors_data:
-            floors_data[floor] = []
-        
-        # 获取该房间的有效入住学生
-        active_students = Student.query.filter_by(
-            room_id=room.id,
-            status='active'
-        ).all()
-        
-        # 计算空床位
-        total_beds = room.capacity
-        occupied_beds = sum(s.bed_occupancy for s in active_students)
-        empty_beds = total_beds - occupied_beds
-        
-        # 判断房型：根据入住学生的收费标准
-        # 单人间收费标准的学生 bed_occupancy=2（一人占全间）
-        # 双人间收费标准的学生 bed_occupancy=1（一人占一床）
-        if active_students:
-            # 如果有学生是单人间标准(bed_occupancy=2)，则该房间显示为"单"
-            room_type = '单' if any(s.bed_occupancy == 2 for s in active_students) else '双'
-        else:
-            # 空房间默认显示双人间
-            room_type = '双'
-        
-        floors_data[floor].append({
-            'room': room,
-            'students': active_students,
-            'empty_beds': empty_beds,
-            'room_type': room_type,
-            'is_empty': len(active_students) == 0,
-            'has_partial': len(active_students) > 0 and empty_beds > 0
-        })
-    
-    # 获取所有楼栋列表（用于切换）
-    buildings = db.session.query(Room.building).distinct().order_by(Room.building).all()
-    buildings = [b[0] for b in buildings]
-    
-    # 计算统计信息
+        info = _build_room_info(room)
+        room_info_map[room.room_number] = info
+        floors_data.setdefault(floor, []).append(info)
+
     total_rooms = len(rooms)
-    empty_rooms = sum(1 for f_data in floors_data.values() for r in f_data if r['is_empty'])
-    partial_rooms = sum(1 for f_data in floors_data.values() for r in f_data if r['has_partial'])
+    empty_rooms = sum(1 for f in floors_data.values() for r in f if r['is_empty'])
+    partial_rooms = sum(1 for f in floors_data.values() for r in f if r['has_partial'])
     full_rooms = total_rooms - empty_rooms - partial_rooms
-    total_empty_beds = sum(r['empty_beds'] for f_data in floors_data.values() for r in f_data)
-    
-    # 计算每楼层统计
+    total_empty_beds = sum(r['empty_beds'] for f in floors_data.values() for r in f)
+
     floor_stats = {}
     for floor, f_data in floors_data.items():
-        floor_total = len(f_data)
-        floor_empty = sum(1 for r in f_data if r['is_empty'])
-        floor_empty_beds = sum(r['empty_beds'] for r in f_data)
         floor_stats[floor] = {
-            'total': floor_total,
-            'empty_rooms': floor_empty,
-            'empty_beds': floor_empty_beds
+            'total': len(f_data),
+            'empty_rooms': sum(1 for r in f_data if r['is_empty']),
+            'empty_beds': sum(r['empty_beds'] for r in f_data)
         }
-    
-    # 楼层从高到低排序
+
     floors_sorted = sorted(floors_data.keys(), reverse=True)
-    
+
+    stats = {
+        'total': total_rooms, 'empty': empty_rooms,
+        'partial': partial_rooms, 'full': full_rooms,
+        'empty_beds': total_empty_beds
+    }
+
+    # 判断是否为A塔/B塔（有平面图配置的楼栋）
+    tower = detect_tower(rooms)
+    layout = get_layout(tower) if tower else None
+
+    # 构建平面图数据：每层一个网格
+    floor_plans = {}
+    if layout:
+        for floor in floors_sorted:
+            floor_str = str(floor)
+            cells_render = []
+            for cell in layout['cells']:
+                c = dict(cell)
+                if cell['type'] == 'room':
+                    # 房间号 = 塔字母 + 楼层号(2位) + 后缀
+                    full_num = f"{tower}{floor_str.zfill(2)}{cell['suffix']}"
+                    c['room_num'] = full_num
+                    info = room_info_map.get(full_num)
+                    if info:
+                        c['room_id'] = info['room'].id
+                        c['is_empty'] = info['is_empty']
+                        c['has_partial'] = info['has_partial']
+                        c['is_full'] = not info['is_empty'] and not info['has_partial']
+                        c['room_type'] = info['room_type']
+                        c['empty_beds'] = info['empty_beds']
+                        c['students'] = info['students']
+                        c['exists'] = True
+                    else:
+                        # 布局中有但系统未录入 = 预留房
+                        c['exists'] = False
+                        c['is_empty'] = True
+                        c['has_partial'] = False
+                        c['is_full'] = False
+                cells_render.append(c)
+            floor_plans[floor] = {
+                'rows': layout['rows'],
+                'cols': layout['cols'],
+                'cells': cells_render
+            }
+
+    # 如果没有平面图配置，强制使用表格视图
+    has_plan = layout is not None
+    if not has_plan:
+        view = 'table'
+
     return render_template('rooms/building_overview.html',
-                         title=f'{building}号楼房间一览',
+                         title=f'{building}房间一览',
                          building=building,
+                         view=view,
+                         has_plan=has_plan,
+                         tower=tower,
                          floors_data=floors_data,
                          floors_sorted=floors_sorted,
                          floor_stats=floor_stats,
+                         floor_plans=floor_plans,
                          buildings=buildings,
-                         stats={
-                             'total': total_rooms,
-                             'empty': empty_rooms,
-                             'partial': partial_rooms,
-                             'full': full_rooms,
-                             'empty_beds': total_empty_beds
-                         })
+                         stats=stats)
 
 
 @bp.route('/<int:room_id>/toggle-type', methods=['POST'])
