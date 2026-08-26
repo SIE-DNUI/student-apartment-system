@@ -300,6 +300,26 @@ class Student(db.Model):
         delta = self.residence_permit_expiry - date.today()
         return delta.days
     
+    def _get_billing_end_date(self):
+        """返回房费计算的截止日期。
+
+        已退房/已归档的学生，计费截止到退房日期（退房后不再继续计费）；
+        若历史数据缺少退房日期，则退回到归档删除时间；都没有时才用今天。
+        在读学生统一以今天为截止日。
+        """
+        from datetime import date as date_module
+        today = date_module.today()
+
+        # 已退房或已归档：截止到退房日期，退房后不再计费
+        if self.status in ('archived', 'checked_out') or self.check_out_date:
+            if self.check_out_date:
+                return min(self.check_out_date, today) if self.check_out_date > today else self.check_out_date
+            # 历史数据可能没有退房日期，用归档删除时间兜底
+            if self.deleted_at:
+                d = self.deleted_at.date() if hasattr(self.deleted_at, 'date') else self.deleted_at
+                return min(d, today)
+        return today
+
     def calculate_arrears(self):
         """计算欠费金额
         
@@ -307,6 +327,7 @@ class Student(db.Model):
         因为只有1个人住在里面，只是占用了更多的床位资源
         
         学年制：已消费计费天数跳过2月8月
+        已退房/归档学生计费截止到退房日期，退房后不再累计欠费。
         """
         if not self.fee_standard_id or not self.check_in_date:
             return 0
@@ -315,11 +336,11 @@ class Student(db.Model):
         if not fee_std or fee_std.price <= 0:
             return 0
         
-        from datetime import date as date_module
-        today = date_module.today()
+        # 已退房/归档学生截止到退房日期，在读学生截止到今天
+        end_date = self._get_billing_end_date()
         
         # 计算已消费计费天数（学年制跳过2月8月）
-        billing_days = fee_std.count_billing_days(self.check_in_date, today)
+        billing_days = fee_std.count_billing_days(self.check_in_date, end_date)
         
         if billing_days <= 0:
             return 0
@@ -414,7 +435,7 @@ class Student(db.Model):
             return 0
         
         today = date.today()
-        end_date = self.check_out_date if self.check_out_date and self.check_out_date < today else today
+        end_date = self._get_billing_end_date()
         
         # 判断是否使用手动到期日期模式
         if self.payment_due_date:
@@ -457,7 +478,7 @@ class Student(db.Model):
             return None
         
         today = date.today()
-        end_date = self.check_out_date if self.check_out_date and self.check_out_date < today else today
+        end_date = self._get_billing_end_date()
         consumed_days = fee_std.count_billing_days(self.check_in_date, end_date)
         
         # 判断是否使用手动到期日期模式
