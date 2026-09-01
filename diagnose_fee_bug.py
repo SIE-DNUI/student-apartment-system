@@ -24,7 +24,7 @@ with app.app_context():
         for s in students:
             print("=" * 60)
             print(f"学生：{s.name} (ID: {s.id}, 学号: {s.student_id})")
-            print(f"当前房间：{s.room.name if s.room else '无'}")
+            print(f"当前房间：{s.room.building + '-' + s.room.room_number if s.room else '无'}")
             print(f"收费标准：{s.fee_standard.name if s.fee_standard else '无'}")
             print(f"total_paid（数据库字段）: {s.total_paid}")
             print(f"calculate_base_paid()（显示值）: {s.calculate_base_paid()}")
