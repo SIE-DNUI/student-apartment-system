@@ -736,13 +736,15 @@
             if (data.same_fee) {
                 box.innerHTML = '<div class="alert alert-info mb-0"><i class="bi bi-info-circle me-1"></i>' + data.message + '</div>';
             } else if (data.needs_payment) {
+                var bedHint = data.bed_info ? '<br><small class="text-primary"><i class="bi bi-house-door me-1"></i>房型将切换为：' + data.bed_info + '</small>' : '';
                 box.innerHTML = '<div class="alert alert-warning mb-0"><i class="bi bi-arrow-up-circle me-1"></i>' +
                     '<strong>需补缴差价 ¥' + data.difference.toFixed(2) + '</strong>' +
-                    '<br><small>' + data.old_fee_name + ' → ' + data.new_fee_name + '，新到期日：' + data.new_due_date + '</small></div>';
+                    '<br><small>' + data.old_fee_name + ' → ' + data.new_fee_name + '，新到期日：' + data.new_due_date + '</small>' + bedHint + '</div>';
             } else {
+                var bedHint = data.bed_info ? '<br><small class="text-primary"><i class="bi bi-house-door me-1"></i>房型将切换为：' + data.bed_info + '</small>' : '';
                 box.innerHTML = '<div class="alert alert-success mb-0"><i class="bi bi-check-circle me-1"></i>' +
                     '<strong>' + data.message + '</strong>' +
-                    '<br><small>' + data.old_fee_name + ' → ' + data.new_fee_name + '，新到期日：' + data.new_due_date + '</small></div>';
+                    '<br><small>' + data.old_fee_name + ' → ' + data.new_fee_name + '，新到期日：' + data.new_due_date + '</small>' + bedHint + '</div>';
             }
         })
         .catch(function() {

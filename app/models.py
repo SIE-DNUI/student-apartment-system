@@ -605,33 +605,27 @@ class Student(db.Model):
         
         difference = preview_data['difference']
         
-        # 更新已缴金额
-        if preview_data['needs_payment']:
-            self.total_paid = (self.total_paid or 0) + difference
-        elif difference < -0.01:
-            # 有余额，加到total_paid里（结转）
+        # 更新已缴金额（只在需要补缴时增加）
+        # 结转余额（difference < 0）时不调整 total_paid：剩余价值已通过到期日自动延续体现
+        # 如果错误地把 difference 加到 total_paid，base_paid() 会从缴费记录重复叠加，导致金额虚高
+        if preview_data['needs_payment'] and difference > 0.01:
             self.total_paid = (self.total_paid or 0) + difference
         
-        # 记录费用调整
+        # 记录费用调整（仅在实际有资金变动时创建缴费记录）
         fee_record = FeeRecord()
         fee_record.student_id = self.id
         fee_record.payment_date = switch_date
         fee_record.payment_method = '费用结转'
         
-        if preview_data['needs_payment']:
+        if preview_data['needs_payment'] and difference > 0.01:
             fee_record.amount = difference
             fee_record.record_type = 'payment'
             fee_record.notes = f'换房型补差价：{preview_data["old_fee"].name} → {preview_data["new_fee"].name}（{switch_date}起）'
-        elif difference < -0.01:
-            fee_record.amount = difference
-            fee_record.record_type = 'refund'
-            fee_record.notes = f'换房型退差价：{preview_data["old_fee"].name} → {preview_data["new_fee"].name}（{switch_date}起）'
+            db.session.add(fee_record)
         else:
-            fee_record.amount = 0
-            fee_record.record_type = 'payment'
-            fee_record.notes = f'换房型（无差价）：{preview_data["old_fee"].name} → {preview_data["new_fee"].name}（{switch_date}起）'
-        
-        db.session.add(fee_record)
+            # 余额结转（difference <= 0）：不创建缴费记录，避免 base_paid 重复计算
+            # 剩余价值通过 new_due_date 自动延续覆盖
+            pass
         
         # 更新房间（处理入住人数）
         # old_bed 是切换前的占用床位数（用于释放旧房间），self.bed_occupancy 为新值（用于占用新房间）

@@ -99,6 +99,9 @@
             <strong>费用刚好，无需补缴！</strong>
             {% endif %}
             <br><small class="text-muted">新标准下剩余价值可住约 {{ preview.new_remaining_days }} 天，预计到期日：{{ preview.new_due_date }}</small>
+            {% if bed_info %}
+            <br><small class="text-primary mt-1"><i class="bi bi-house-door me-1"></i>房型将自动切换为：<strong>{{ bed_info }}</strong></small>
+            {% endif %}
         </div>
 
         <!-- 确认执行表单 -->
