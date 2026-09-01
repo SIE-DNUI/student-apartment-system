@@ -11,7 +11,7 @@ app = create_app()
 with app.app_context():
     # 1. 给数据库表新增 fee_start_date 列（如果不存在）
     try:
-        db.engine.execute("ALTER TABLE students ADD COLUMN fee_start_date DATE")
+        db.session.execute(db.text("ALTER TABLE students ADD COLUMN fee_start_date DATE"))
         print("✅ 已新增 fee_start_date 列")
     except Exception as e:
         if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
