@@ -684,20 +684,9 @@
         document.getElementById('qs-preview-box').style.display = 'none';
     }
 
-    function onQuickSwitchFeeToggle() {
-        const checked = document.getElementById('qs-change-fee').checked;
-        const feeSel = document.getElementById('qs-fee-select');
-        feeSel.disabled = !checked;
-        if (!checked) feeSel.value = '';
-        qsPreviewReady = false;
-        document.getElementById('qs-preview-box').style.display = 'none';
-    }
-
+    // 已移除 onQuickSwitchFeeToggle（不再需要复选框）
     function qsSelectedFeeId() {
-        if (document.getElementById('qs-change-fee').checked) {
-            return document.getElementById('qs-fee-select').value || '';
-        }
-        return '';  // 不换房型
+        return document.getElementById('qs-fee-select').value || '';
     }
 
     function previewQuickSwitch() {
@@ -857,7 +846,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>一键换房</h5>
+                <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>一键换房/换收费标准</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="" id="quick-switch-form">
@@ -873,13 +862,13 @@
                         </div>
                     </div>
 
-                    <!-- 选择目标房间 -->
+                    <!-- 选择目标房间（可选） -->
                     <div class="mb-3">
-                        <label class="form-label fw-bold">目标房间 <span class="text-danger">*</span></label>
-                        <select id="qs-room-select" name="new_room_id" class="form-select" required onchange="onQuickSwitchRoomChange()">
-                            <option value="">-- 请选择目标房间 --</option>
+                        <label class="form-label fw-bold">目标房间（可选）</label>
+                        <select id="qs-room-select" name="new_room_id" class="form-select" onchange="onQuickSwitchRoomChange()">
+                            <option value="">-- 不更换房间 --</option>
                         </select>
-                        <small class="text-muted">仅显示有空床位的非维修房间</small>
+                        <small class="text-muted">不选择则表示只换收费标准，不换房间</small>
                     </div>
 
                     <!-- 切换日期 -->
@@ -888,13 +877,10 @@
                         <input type="date" id="qs-date" name="switch_date" class="form-control" required>
                     </div>
 
-                    <!-- 换房型（可选） -->
+                    <!-- 更换收费标准（可选） -->
                     <div class="mb-3">
-                        <label class="form-label fw-bold">
-                            <input type="checkbox" id="qs-change-fee" onchange="onQuickSwitchFeeToggle()">
-                            同时更换收费标准（换房型）
-                        </label>
-                        <select id="qs-fee-select" name="new_fee_standard_id" class="form-select" disabled>
+                        <label class="form-label fw-bold">更换收费标准（可选）</label>
+                        <select id="qs-fee-select" name="new_fee_standard_id" class="form-select">
                             <option value="">-- 保持原收费标准 --</option>
                             {% for fs in switch_fee_standards %}
                             <option value="{{ fs.id }}">{{ fs.name }} — ¥{{ "%.2f"|format(fs.price) }}/{{ fs.unit }}
@@ -902,7 +888,7 @@
                             </option>
                             {% endfor %}
                         </select>
-                        <small class="text-muted">勾选后才会出现收费标准下拉，不勾选则只换房间、房费和到期日不变</small>
+                        <small class="text-muted">选择新收费标准后，系统会自动计算费用变更和新到期日</small>
                     </div>
 
                     <!-- 费用预览区 -->
@@ -914,7 +900,7 @@
                     </button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                     <button type="button" class="btn btn-success" onclick="submitQuickSwitch()">
-                        <i class="bi bi-check-lg me-1"></i>确认换房
+                        <i class="bi bi-check-lg me-1"></i>确认执行
                     </button>
                 </div>
             </form>
