@@ -8,18 +8,23 @@ from app.models import db, Student, FeeRecord
 app = create_app()
 
 with app.app_context():
-    # 查找这两个学生
+    # 查找这两个学生（模糊匹配）
     students = Student.query.filter(
-        Student.name.in_(['MYTSYK ALEKSANDRA', 'SHIRIAEVA OLESIA'])
+        db.or_(
+            Student.name.like('%MYTSYK%'),
+            Student.name.like('%ALEKSANDRA%'),
+            Student.name.like('%SHIRIAEVA%'),
+            Student.name.like('%OLESIA%')
+        )
     ).all()
     
+    print(f"找到 {len(students)} 个匹配的学生\n")
+    
     if not students:
-        print("未找到这两个学生，请检查姓名拼写")
-        # 列出所有学生姓名供参考
-        all_students = Student.query.filter(Student.status != 'archived').order_by(Student.name).all()
-        print(f"\n当前在住学生（共 {len(all_students)} 人）：")
+        print("未找到相关学生，列出所有学生供参考：")
+        all_students = Student.query.order_by(Student.name).all()
         for s in all_students:
-            print(f"  - {s.name} (ID: {s.id})")
+            print(f"  - {s.name} (ID: {s.id}, status: {s.status})")
     else:
         for s in students:
             print("=" * 60)
