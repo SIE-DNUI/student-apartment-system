@@ -709,49 +709,64 @@ def switch_room(id):
 def quick_switch_preview(id):
     """一键换房：费用结算预览（AJAX，返回JSON）
 
-    仅当同时更换收费标准（换房型）时才需要预览差价；
-    只换房间不换房型时，费用和到期日不变，返回 same_fee 提示。
+    支持三种场景：只换房间、只换收费标准（或房型）、或同时换。
     """
     student = Student.query.get_or_404(id)
     new_room_id = request.form.get('new_room_id', type=int)
     new_fee_id = request.form.get('new_fee_standard_id', type=int)
+    new_bed_raw = request.form.get('new_bed_occupancy', '').strip()
     switch_date_str = request.form.get('switch_date', '').strip()
+
+    # 确定最终 bed_occupancy：优先用户明确选择 → 收费标准推断 → 当前值
+    if new_bed_raw in ('1', '2'):
+        final_bed = int(new_bed_raw)
+    else:
+        inferred = _infer_bed_occupancy(new_fee_id)
+        final_bed = inferred if inferred is not None else student.bed_occupancy
 
     try:
         switch_date = datetime.strptime(switch_date_str, '%Y-%m-%d').date()
     except (ValueError, TypeError):
         return jsonify({'ok': False, 'error': '切换日期无效'}), 400
 
+    # 至少选择一项
     new_room = Room.query.get(new_room_id) if new_room_id else None
-    if not new_room:
-        return jsonify({'ok': False, 'error': '请选择目标房间'}), 400
-    if new_room.status == 'maintenance':
-        return jsonify({'ok': False, 'error': f'房间 {new_room.building}-{new_room.room_number} 正在维修，不能入住'}), 400
-    if student.room_id != new_room.id:
-        # 如果换房型，bed_occupancy可能随收费标准名称变化
-        required_bed = _infer_bed_occupancy(new_fee_id) or student.bed_occupancy
-        available_beds = new_room.capacity - new_room.current_occupancy
-        if available_beds < required_bed:
-            return jsonify({'ok': False, 'error': f'房间 {new_room.building}-{new_room.room_number} 剩余床位不足（需 {required_bed}，剩 {available_beds}）'}), 400
+    is_fee_change = bool(new_fee_id) and new_fee_id != student.fee_standard_id
+    is_bed_change = new_bed_raw in ('1', '2') and int(new_bed_raw) != student.bed_occupancy
+    if not new_room and not is_fee_change and not is_bed_change:
+        return jsonify({'ok': False, 'error': '请至少选择目标房间、房间类型或新收费标准'}), 400
 
-    # 判断是否换房型
-    if not new_fee_id or new_fee_id == student.fee_standard_id:
+    # 床位充足性检查
+    if new_room:
+        if new_room.status == 'maintenance':
+            return jsonify({'ok': False, 'error': f'房间 {new_room.building}-{new_room.room_number} 正在维修，不能入住'}), 400
+        if student.room_id != new_room.id:
+            # 换到新房间：新房间需要提供的床位 = final_bed
+            available_beds = new_room.capacity - new_room.current_occupancy
+            if available_beds < final_bed:
+                return jsonify({'ok': False, 'error': f'房间 {new_room.building}-{new_room.room_number} 剩余床位不足（需 {final_bed}，剩 {available_beds}）'}), 400
+        else:
+            # 不换房间但改房型：释放旧床位后检查
+            available = new_room.capacity - new_room.current_occupancy + student.bed_occupancy
+            if available < final_bed:
+                return jsonify({'ok': False, 'error': f'房间 {new_room.building}-{new_room.room_number} 床位不足（需 {final_bed}，可用 {available}）'}), 400
+
+    # 不换收费标准
+    if not is_fee_change:
         return jsonify({
             'ok': True,
             'same_fee': True,
-            'message': '收费标准不变，房费和到期日保持不变，仅更换房间。'
+            'message': '收费标准不变，房费和到期日保持不变。'
         })
 
-    # 换房型：复用现有结算逻辑
+    # 换收费标准：计算费用差价
     if not student.fee_standard_id:
         return jsonify({'ok': False, 'error': '该学生尚未设置收费标准，无法计算换房型费用'}), 400
     preview = student.preview_room_switch(new_fee_id, switch_date)
     if not preview:
         return jsonify({'ok': False, 'error': '无法计算费用，请确认学生入住日期和收费标准'}), 400
 
-    # 推断新收费标准对应的房型
-    inferred_bed = _infer_bed_occupancy(new_fee_id)
-    bed_info = '单人间' if inferred_bed == 2 else ('双人间' if inferred_bed == 1 else '')
+    bed_info = '单人间' if final_bed == 2 else ('双人间' if final_bed == 1 else '')
 
     return jsonify({
         'ok': True,
@@ -784,15 +799,23 @@ def quick_switch(id):
     student = Student.query.get_or_404(id)
     new_room_id = request.form.get('new_room_id', type=int)
     new_fee_id = request.form.get('new_fee_standard_id', type=int)
+    new_bed_raw = request.form.get('new_bed_occupancy', '').strip()
     switch_date_str = request.form.get('switch_date', '').strip()
-    page = request.form.get('page', 1, type=int)  # 保留来源分页页码
+    page = request.form.get('page', 1, type=int)
+
+    # 确定最终 bed_occupancy：优先用户明确选择 → 收费标准推断
+    if new_bed_raw in ('1', '2'):
+        explicit_bed = int(new_bed_raw)
+    else:
+        explicit_bed = _infer_bed_occupancy(new_fee_id)  # 可能为 None
 
     new_room = Room.query.get(new_room_id) if new_room_id else None
     is_fee_change = bool(new_fee_id) and new_fee_id != student.fee_standard_id
-    
-    # 至少要选择换房间或换收费标准之一
-    if not new_room and not is_fee_change:
-        flash('请选择目标房间或新收费标准', 'danger')
+    is_bed_change = explicit_bed is not None and explicit_bed != student.bed_occupancy
+
+    # 至少选择一项（房间/收费标准/房型）
+    if not new_room and not is_fee_change and not is_bed_change:
+        flash('请至少选择目标房间、房间类型或新收费标准', 'danger')
         return redirect(url_for('students.index', page=page))
 
     try:
@@ -801,57 +824,69 @@ def quick_switch(id):
         switch_date = date.today()
 
     old_room = student.room
-    # is_fee_change 已在上面定义
-
-    # 如果换房型，根据收费标准名称自动推断新的 bed_occupancy
-    new_bed_occupancy = _infer_bed_occupancy(new_fee_id) if is_fee_change else None
     old_bed_occupancy = student.bed_occupancy
-    if new_bed_occupancy is not None:
-        student.bed_occupancy = new_bed_occupancy
 
-    # 床位校验（仅在换房间时校验）
+    # 设置新的 bed_occupancy（explicit_bed 优先，已在上文计算）
+    if explicit_bed is not None:
+        student.bed_occupancy = explicit_bed
+
+    # 床位校验
     if new_room and student.room_id != new_room.id:
+        # 换到新房间
         available_beds = new_room.capacity - new_room.current_occupancy
         if available_beds < student.bed_occupancy:
-            # 校验失败时恢复 bed_occupancy
             student.bed_occupancy = old_bed_occupancy
             flash(f'房间 {new_room.building}-{new_room.room_number} 剩余床位不足（需 {student.bed_occupancy}，剩 {available_beds}），换房失败', 'danger')
             return redirect(url_for('students.index', page=page))
+    elif not new_room and is_bed_change:
+        # 不换房间但改房型：检查当前房间释放旧床位后是否够用
+        available = old_room.capacity - old_room.current_occupancy + old_bed_occupancy
+        if available < student.bed_occupancy:
+            student.bed_occupancy = old_bed_occupancy
+            flash(f'当前房间床位不足，无法变更为所需房型（需 {student.bed_occupancy}，可用 {available}）', 'danger')
+            return redirect(url_for('students.index', page=page))
 
-    if is_fee_change:
-        # 换房型：复用现有完整结算逻辑（含床位增减、费用记录、到期日重算）
+    if is_fee_change or is_bed_change:
+        # 涉及收费标准或房型变更：必须有收费标准才能计算费用
+        if not student.fee_standard_id and not new_fee_id:
+            student.bed_occupancy = old_bed_occupancy
+            flash('无法计算费用，该学生尚未设置收费标准', 'danger')
+            return redirect(url_for('students.index', page=page))
+        # 如果只改房型但没选收费标准，用当前收费标准（仅更新 bed_occupancy）
+        if not new_fee_id:
+            # 只改房型，不换收费标准：直接提交，不做费用结算
+            db.session.commit()
+            _update_room_fee_standard(old_room)
+            bed_label = '单人间' if student.bed_occupancy == 2 else '双人间'
+            flash(f'{student.name} 房型已变更为{bed_label}（收费标准不变）', 'success')
+            return redirect(url_for('students.index', page=page))
+        # 换收费标准：完整结算
         preview = student.preview_room_switch(new_fee_id, switch_date)
         if not preview:
             student.bed_occupancy = old_bed_occupancy
             flash('无法计算换房费用，请确认学生入住日期和收费标准', 'danger')
             return redirect(url_for('students.index', page=page))
-        # 传入 old_bed_occupancy，让 execute_room_switch 正确释放旧房间床位
-        # 如果没有选择新房间，则继续使用旧房间
         target_room_id = new_room.id if new_room else old_room.id
         result = student.execute_room_switch(new_fee_id, target_room_id, switch_date, preview, old_bed_occupancy=old_bed_occupancy)
         db.session.commit()
-        # execute_room_switch 已更新床位；同步新旧房间收费标准联动
         _update_room_fee_standard(old_room)
         if new_room and new_room.id != (old_room.id if old_room else None):
             _update_room_fee_standard(new_room)
-        
-        # 根据情况显示不同的消息
+        bed_label = '单人间' if student.bed_occupancy == 2 else '双人间'
         if new_room:
-            # 同时换房间和收费标准
             if result['needs_payment']:
-                flash(f'{student.name} 换房成功！换到 {new_room.building}-{new_room.room_number}，需补缴 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
+                flash(f'{student.name} 换房成功（{bed_label}）！换到 {new_room.building}-{new_room.room_number}，需补缴 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
             elif result['difference'] > 0.01:
-                flash(f'{student.name} 换房成功！换到 {new_room.building}-{new_room.room_number}，余额结转 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
+                flash(f'{student.name} 换房成功（{bed_label}）！换到 {new_room.building}-{new_room.room_number}，余额结转 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
             else:
-                flash(f'{student.name} 换房成功！换到 {new_room.building}-{new_room.room_number}，新到期日：{result["new_due_date"]}', 'success')
+                flash(f'{student.name} 换房成功（{bed_label}）！换到 {new_room.building}-{new_room.room_number}，新到期日：{result["new_due_date"]}', 'success')
         else:
-            # 只换收费标准，不换房间
             if result['needs_payment']:
-                flash(f'{student.name} 收费标准变更成功！需补缴 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
+                flash(f'{student.name} 收费标准变更成功（{bed_label}）！需补缴 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
             elif result['difference'] > 0.01:
-                flash(f'{student.name} 收费标准变更成功！余额结转 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
+                flash(f'{student.name} 收费标准变更成功（{bed_label}）！余额结转 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
             else:
-                flash(f'{student.name} 收费标准变更成功！新到期日：{result["new_due_date"]}', 'success')
+                flash(f'{student.name} 收费标准变更成功（{bed_label}）！新到期日：{result["new_due_date"]}', 'success')
     else:
         # 只换房间：费用与到期日不变
         old_r, new_r = student.move_room(new_room)

@@ -620,6 +620,12 @@
     const qsFeeNames = {
         {% for fs in switch_fee_standards %}{{ fs.id }}: '{{ fs.name }}'{% if not loop.last %},{% endif %}{% endfor %}
     };
+    // 完整收费标准列表，用于按房型过滤
+    const qsAllFeeStandards = [
+        {% for fs in switch_fee_standards %}
+        { id: {{ fs.id }}, name: '{{ fs.name }}' }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
     let qsStudentId = null;
     let qsPreviewReady = false;  // 当前选择是否已做过有效预览（换房型时强制要求）
 
@@ -661,9 +667,14 @@
         const ymd = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
         document.getElementById('qs-date').value = ymd;
 
-        // 重置收费标准选择
+        // 初始化房型下拉框（保持原房型）
+        const bedSel = document.getElementById('qs-bed-select');
+        bedSel.value = '';  // 默认"保持原房型"
+
+        // 重置收费标准选择（显示全部）
         const feeSel = document.getElementById('qs-fee-select');
         feeSel.value = '';
+        qsRebuildFeeOptions('');  // 显示所有收费标准
 
         // 重置预览
         document.getElementById('qs-preview-box').style.display = 'none';
@@ -681,6 +692,70 @@
         document.getElementById('qs-preview-box').style.display = 'none';
     }
 
+    // 根据房型关键词过滤并重建收费标准下拉框
+    function qsRebuildFeeOptions(bedKeyword) {
+        const feeSel = document.getElementById('qs-fee-select');
+        const currentVal = feeSel.value;
+        feeSel.innerHTML = '<option value="">-- 保持原收费标准 --</option>';
+        qsAllFeeStandards.forEach(function(fs) {
+            if (bedKeyword && fs.name.indexOf(bedKeyword) === -1) return;
+            const opt = document.createElement('option');
+            opt.value = fs.id;
+            opt.textContent = fs.name;
+            feeSel.appendChild(opt);
+        });
+        // 如果原选中项仍在列表中则保留，否则重置
+        if (currentVal) {
+            const stillExists = Array.from(feeSel.options).some(o => o.value === currentVal);
+            if (stillExists) feeSel.value = currentVal;
+        }
+    }
+
+    // 房型下拉变化时：过滤收费标准列表，若只有一项则自动选中
+    function qsBedChange() {
+        const bed = document.getElementById('qs-bed-select').value;
+        const keyword = bed === '1' ? '双人间' : (bed === '2' ? '单人间' : '');
+        qsRebuildFeeOptions(keyword);
+        // 如果筛选后只有一个收费标准，自动选中
+        const feeSel = document.getElementById('qs-fee-select');
+        const opts = Array.from(feeSel.options).filter(o => o.value);
+        if (opts.length === 1) {
+            feeSel.value = opts[0].value;
+        }
+        qsPreviewReady = false;
+        document.getElementById('qs-preview-box').style.display = 'none';
+    }
+
+    // 根据选中的收费标准名称，自动同步房型下拉框
+    function qsSyncBedFromFee() {
+        const feeSel = document.getElementById('qs-fee-select');
+        const feeId = feeSel.value;
+        const bedSel = document.getElementById('qs-bed-select');
+        if (!feeId) {
+            bedSel.value = '';
+            qsRebuildFeeOptions('');
+            return;
+        }
+        const feeName = qsFeeNames[feeId] || '';
+        if (feeName.indexOf('单人间') !== -1) {
+            bedSel.value = '2';
+            qsRebuildFeeOptions('单人间');
+            feeSel.value = feeId;  // 重建后恢复选中
+        } else if (feeName.indexOf('双人间') !== -1) {
+            bedSel.value = '1';
+            qsRebuildFeeOptions('双人间');
+            feeSel.value = feeId;
+        } else {
+            bedSel.value = '';
+            qsRebuildFeeOptions('');
+            feeSel.value = feeId;
+        }
+    }
+
+    function qsSelectedBedOccupancy() {
+        return document.getElementById('qs-bed-select').value || '';
+    }
+
     // 已移除 onQuickSwitchFeeToggle（不再需要复选框）
     function qsSelectedFeeId() {
         return document.getElementById('qs-fee-select').value || '';
@@ -690,15 +765,17 @@
         const roomId = document.getElementById('qs-room-select').value;
         const switchDate = document.getElementById('qs-date').value;
         const feeId = document.getElementById('qs-fee-select').value;
+        const bedVal = qsSelectedBedOccupancy();
         const box = document.getElementById('qs-preview-box');
 
-        if (!roomId && !feeId) { alert('请先选择目标房间或新收费标准'); return; }
+        if (!roomId && !feeId && !bedVal) { alert('请先选择目标房间、房间类型或新收费标准'); return; }
         if (!switchDate) { alert('请选择切换日期'); return; }
 
         const body = new URLSearchParams();
         body.append('csrf_token', '{{ csrf_token() }}');
         body.append('new_room_id', roomId);
-        body.append('new_fee_standard_id', qsSelectedFeeId());
+        body.append('new_fee_standard_id', feeId);
+        body.append('new_bed_occupancy', bedVal);
         body.append('switch_date', switchDate);
 
         fetch(qsActionUrl('preview'), {
@@ -740,21 +817,27 @@
         const roomId = document.getElementById('qs-room-select').value;
         const switchDate = document.getElementById('qs-date').value;
         const feeId = document.getElementById('qs-fee-select').value;
-        if (!roomId && !feeId) { alert('请选择目标房间或新收费标准'); return; }
+        const bedVal = qsSelectedBedOccupancy();
+        if (!roomId && !feeId && !bedVal) { alert('请选择目标房间、房间类型或新收费标准'); return; }
         if (!switchDate) { alert('请选择切换日期'); return; }
 
-        if (feeId) {
-            if (!document.getElementById('qs-fee-select').value) { alert('请选择新的收费标准'); return; }
-            if (!qsPreviewReady) { alert('换房型涉及费用结算，请先点击「预览费用」确认差价'); return; }
+        // 有房型或收费标准变更时，需要先预览
+        const feeChanged = !!(feeId);
+        const bedChanged = !!(bedVal);
+        if ((feeChanged || bedChanged) && !qsPreviewReady) {
+            alert('涉及房型或费用变更，请先点击「预览费用」确认');
+            return;
         }
 
-        const roomLabel = document.getElementById('qs-room-select').selectedOptions[0].textContent;
-        const msg = feeChanged
-            ? '确认换房并换房型？\n目标房间：' + roomLabel + '\n费用结算以预览为准。'
-            : '确认换到 ' + roomLabel + '？\n（房费与到期日不变）';
+        const roomLabel = roomId
+            ? document.getElementById('qs-room-select').selectedOptions[0].textContent
+            : '（不更换）';
+        const bedLabel = bedVal === '1' ? '双人间' : (bedVal === '2' ? '单人间' : '（保持原房型）');
+        let msg = '确认执行？\n目标房间：' + roomLabel + '\n房间类型：' + bedLabel;
+        if (feeChanged) msg += '\n费用结算以预览为准。';
         if (!confirm(msg)) return;
 
-        // 不换房型时不提交 fee 字段
+        // 不换收费标准时，禁用 fee 字段避免提交空值
         const feeSel = document.getElementById('qs-fee-select');
         feeSel.disabled = feeChanged ? false : true;
         if (!feeChanged) feeSel.value = '';
@@ -839,7 +922,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>一键换房/换收费标准</h5>
+                <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>一键换房/换房型/换收费标准</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="" id="quick-switch-form">
@@ -864,6 +947,17 @@
                         <small class="text-muted">不选择则表示只换收费标准，不换房间</small>
                     </div>
 
+                    <!-- 房间类型（可选） -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">房间类型（可选）</label>
+                        <select id="qs-bed-select" name="new_bed_occupancy" class="form-select" onchange="qsBedChange()">
+                            <option value="">-- 保持原房型 --</option>
+                            <option value="1">双人间（占1床位）</option>
+                            <option value="2">单人间（占2床位）</option>
+                        </select>
+                        <small class="text-muted">选择房型后，收费标准会自动筛选对应选项</small>
+                    </div>
+
                     <!-- 切换日期 -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">切换日期 <span class="text-danger">*</span></label>
@@ -873,15 +967,13 @@
                     <!-- 更换收费标准（可选） -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">更换收费标准（可选）</label>
-                        <select id="qs-fee-select" name="new_fee_standard_id" class="form-select">
+                        <select id="qs-fee-select" name="new_fee_standard_id" class="form-select" onchange="qsSyncBedFromFee()">
                             <option value="">-- 保持原收费标准 --</option>
                             {% for fs in switch_fee_standards %}
-                            <option value="{{ fs.id }}">{{ fs.name }} — ¥{{ "%.2f"|format(fs.price) }}/{{ fs.unit }}
-                                {% if fs.fee_type == '学年' %}（学年制，不含寒暑假）{% elif fs.fee_type == '自然年' %}（自然年，含假期）{% endif %}
-                            </option>
+                            <option value="{{ fs.id }}">{{ fs.name }}</option>
                             {% endfor %}
                         </select>
-                        <small class="text-muted">选择新收费标准后，系统会自动计算费用变更和新到期日</small>
+                        <small class="text-muted">选择新收费标准后，房型会自动同步；也可先选房型再选标准</small>
                     </div>
 
                     <!-- 费用预览区 -->
