@@ -660,9 +660,9 @@ class Student(db.Model):
         old_consumed_days = old_fee_std.count_billing_days(fee_start, switch_date + timedelta(days=1))
         old_daily = old_fee_std.price / old_fee_std.get_unit_days()
         old_consumed_value = old_consumed_days * old_daily
-        # 新标准期初已缴 = 当前总已缴 + 补缴差价 - 旧标准已消费
-        # 这代表"可用于新收费标准的金额"
-        new_fee_start_paid = max(0, (self.total_paid or 0) - old_consumed_value)
+        # fee_start_paid = 旧标准已消费金额
+        # 这样 available = total_paid - fee_start_paid = 剩余可用金额
+        new_fee_start_paid = old_consumed_value
         
         # 更新收费标准、费用起算日期和期初已缴金额
         self.fee_standard_id = new_fee_standard_id

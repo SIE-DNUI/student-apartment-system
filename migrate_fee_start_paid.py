@@ -37,15 +37,17 @@ with app.app_context():
     
     # 3. 修复 SHIRIAEVA OLESIA 的数据
     # 情况：第一学年住双人间(6000/年)，已消费6000，剩余0
-    # 换到单人间后，fee_start_paid 应为 0
+    # fee_start_paid = 旧标准已消费金额 = 6000
+    # available = total_paid - fee_start_paid = 6000 - 6000 = 0
     olesia = Student.query.filter(Student.name.like('%SHIRIAEVA%')).first()
     if olesia:
-        olesia.fee_start_paid = 0  # 第一学年6000已全部消费，无剩余
+        olesia.fee_start_paid = 6000  # 第一学年已消费6000
         db.session.commit()
         print(f"\n✅ 修复 SHIRIAEVA OLESIA (ID:{olesia.id})")
-        print(f"   fee_start_paid = 0（第一学年已消费6000，无剩余）")
+        print(f"   fee_start_paid = 6000（第一学年已消费6000）")
         print(f"   total_paid = {olesia.total_paid}")
         print(f"   fee_start_date = {olesia.fee_start_date}")
+        print(f"   available = {olesia.total_paid - olesia.fee_start_paid}")
         arrears = olesia.calculate_arrears()
         auto_due = olesia.calculate_auto_due_date()
         print(f"   欠费 = {arrears}")
@@ -55,15 +57,17 @@ with app.app_context():
     
     # 4. 修复 MYTSYK ALEKSANDRA 的数据
     # 情况：第一学年住双人间(6000/年)，已消费6000，剩余12000
-    # 换到单人间后，fee_start_paid 应为 12000
+    # fee_start_paid = 旧标准已消费金额 = 6000
+    # available = total_paid - fee_start_paid = 18000 - 6000 = 12000
     mytsyk = Student.query.filter(Student.name.like('%MYTSYK%')).first()
     if mytsyk:
-        mytsyk.fee_start_paid = 12000  # 第一学年消费6000，剩余12000
+        mytsyk.fee_start_paid = 6000  # 第一学年已消费6000
         db.session.commit()
         print(f"\n✅ 修复 MYTSYK ALEKSANDRA (ID:{mytsyk.id})")
-        print(f"   fee_start_paid = 12000（第一学年已消费6000，剩余12000）")
+        print(f"   fee_start_paid = 6000（第一学年已消费6000）")
         print(f"   total_paid = {mytsyk.total_paid}")
         print(f"   fee_start_date = {mytsyk.fee_start_date}")
+        print(f"   available = {mytsyk.total_paid - mytsyk.fee_start_paid}")
         arrears = mytsyk.calculate_arrears()
         auto_due = mytsyk.calculate_auto_due_date()
         print(f"   欠费 = {arrears}")
