@@ -1,6 +1,6 @@
 """
 小修复：清除 SHIRIAEVA OLESIA 的旧 payment_due_date
-让系统基于 fee_start_date 自动重算到期日
+让系统基于 fee_restart_date 自动重算到期日
 在 PythonAnywhere 的 Bash console 里运行：python fix_olesia_due_date.py
 """
 from app import create_app
@@ -16,7 +16,7 @@ with app.app_context():
     
     print(f"学生：SHIRIAEVA OLESIA (ID: {olesia.id})")
     print(f"  修复前 payment_due_date = {olesia.payment_due_date}")
-    print(f"  fee_start_date = {olesia.fee_start_date}")
+    print(f"  fee_restart_date = {olesia.fee_restart_date}")
     print(f"  收费标准 = {olesia.fee_standard.name}")
     print(f"  total_paid = {olesia.total_paid}")
     
@@ -26,7 +26,7 @@ with app.app_context():
     db.session.commit()
     
     print(f"\n✅ 已清除 payment_due_date（原值: {old_due}）")
-    print(f"  系统将基于 fee_start_date={olesia.fee_start_date} 自动计算到期日")
+    print(f"  系统将基于 fee_restart_date={olesia.fee_restart_date} 自动计算到期日")
     
     # 验证自动计算的到期日
     auto_due = olesia.calculate_auto_due_date()

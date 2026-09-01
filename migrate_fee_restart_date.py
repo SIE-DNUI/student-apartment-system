@@ -1,52 +1,42 @@
 """
-迁移脚本：新增 fee_start_paid 字段，并初始化数据
-fee_start_paid = 当前收费标准下的期初已缴金额（total_paid 中可用于当前标准的金额）
+数据库迁移脚本：将 fee_start_date 改名为 fee_restart_date，并修正数据语义
+fee_restart_date = 换房/换收费标准后的新起算日期（未换过房则为空）
+计算时：billing_start = fee_restart_date or check_in_date
 
-在 PythonAnywhere 的 Bash console 里运行：python migrate_fee_start_paid.py
+在 PythonAnywhere 的 Bash console 里运行：python migrate_fee_restart_date.py
 """
 from app import create_app
-from app.models import db, Student, FeeStandard
+from app.models import db, Student
 from datetime import date
 
 app = create_app()
 
 with app.app_context():
-    # 1. 新增 fee_start_paid 列
+    # 1. 新增 fee_restart_date 列
     try:
-        db.session.execute(db.text("ALTER TABLE students ADD COLUMN fee_start_paid FLOAT DEFAULT 0"))
-        print("✅ 已新增 fee_start_paid 列")
+        db.session.execute(db.text("ALTER TABLE students ADD COLUMN fee_restart_date DATE"))
+        print("✅ 已新增 fee_restart_date 列")
     except Exception as e:
         if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
-            print("⏭️  fee_start_paid 列已存在，跳过创建")
+            print("⏭️  fee_restart_date 列已存在，跳过创建")
         else:
             print(f"❌ 新增列失败：{e}")
             raise
     
-    # 2. 默认初始化：所有 fee_start_paid 为空的学生，设为 total_paid
-    # （未换房的学生，fee_start_paid = total_paid）
-    students_updated = 0
-    students = Student.query.filter(
-        Student.fee_start_paid.is_(None),
-        Student.fee_start_date.isnot(None)
-    ).all()
-    for s in students:
-        s.fee_start_paid = s.total_paid or 0
-        students_updated += 1
-    db.session.commit()
-    print(f"✅ 已为 {students_updated} 个学生初始化 fee_start_paid = total_paid")
+    # 2. 给所有 fee_restart_date 为空的学生，默认设为 None（不设置值）
+    # 大多数学生没有换过房，fee_restart_date 应该为空，计算时用 check_in_date
+    print("\n✅ 大多数学生的 fee_restart_date 保持为空（未换过房）")
     
-    # 3. 修复 SHIRIAEVA OLESIA 的数据
-    # 情况：第一学年住双人间(6000/年)，已消费6000，剩余0
-    # fee_start_paid = 旧标准已消费金额 = 6000
-    # available = total_paid - fee_start_paid = 6000 - 6000 = 0
+    # 3. 修复 SHIRIAEVA OLESIA 的数据（换房日期 2026-09-01，fee_restart_date 应为 2026-09-02）
     olesia = Student.query.filter(Student.name.like('%SHIRIAEVA%')).first()
     if olesia:
-        olesia.fee_start_paid = 6000  # 第一学年已消费6000
+        olesia.fee_restart_date = date(2026, 9, 2)
+        olesia.fee_start_paid = 6000  # 第一学年已消费6000（双人间6000/年，住满一年）
         db.session.commit()
         print(f"\n✅ 修复 SHIRIAEVA OLESIA (ID:{olesia.id})")
+        print(f"   fee_restart_date = 2026-09-02（换房次日）")
         print(f"   fee_start_paid = 6000（第一学年已消费6000）")
         print(f"   total_paid = {olesia.total_paid}")
-        print(f"   fee_start_date = {olesia.fee_start_date}")
         print(f"   available = {olesia.total_paid - olesia.fee_start_paid}")
         arrears = olesia.calculate_arrears()
         auto_due = olesia.calculate_auto_due_date()
@@ -56,17 +46,15 @@ with app.app_context():
         print("⚠️  未找到 SHIRIAEVA OLESIA")
     
     # 4. 修复 MYTSYK ALEKSANDRA 的数据
-    # 情况：第一学年住双人间(6000/年)，已消费6000，剩余12000
-    # fee_start_paid = 旧标准已消费金额 = 6000
-    # available = total_paid - fee_start_paid = 18000 - 6000 = 12000
     mytsyk = Student.query.filter(Student.name.like('%MYTSYK%')).first()
     if mytsyk:
+        mytsyk.fee_restart_date = date(2026, 9, 2)
         mytsyk.fee_start_paid = 6000  # 第一学年已消费6000
         db.session.commit()
         print(f"\n✅ 修复 MYTSYK ALEKSANDRA (ID:{mytsyk.id})")
+        print(f"   fee_restart_date = 2026-09-02（换房次日）")
         print(f"   fee_start_paid = 6000（第一学年已消费6000）")
         print(f"   total_paid = {mytsyk.total_paid}")
-        print(f"   fee_start_date = {mytsyk.fee_start_date}")
         print(f"   available = {mytsyk.total_paid - mytsyk.fee_start_paid}")
         arrears = mytsyk.calculate_arrears()
         auto_due = mytsyk.calculate_auto_due_date()
@@ -79,13 +67,10 @@ with app.app_context():
     print("\n" + "=" * 60)
     print("验证结果：")
     all_students = Student.query.filter(Student.status != 'archived').order_by(Student.name).all()
-    null_count = sum(1 for s in all_students if s.fee_start_paid is None)
+    restart_not_null = sum(1 for s in all_students if s.fee_restart_date is not None)
     print(f"  在住学生总数：{len(all_students)}")
-    print(f"  fee_start_paid 为空的数量：{null_count}")
-    if null_count == 0:
-        print("  ✅ 所有在住学生都有 fee_start_paid")
-    else:
-        print("  ⚠️  仍有学生缺少 fee_start_paid")
+    print(f"  fee_restart_date 不为空的数量：{restart_not_null}（换过房的学生）")
+    print(f"  fee_restart_date 为空的数量：{len(all_students) - restart_not_null}（未换过房，计算时用check_in_date）")
     
     # 检查欠费学生
     arrears_list = [s for s in all_students if s.has_arrears()]

@@ -203,7 +203,7 @@ class Student(db.Model):
     
     # 费用信息
     fee_standard_id = db.Column(db.Integer, db.ForeignKey('fee_standards.id'))
-    fee_start_date = db.Column(db.Date)  # 当前收费标准起算日期（换房时更新为换房次日，未换房则等于入住日期）
+    fee_restart_date = db.Column(db.Date)  # 换房/换收费标准后的新起算日期（未换过房则为空，计算时用 check_in_date）
     fee_start_paid = db.Column(db.Float, default=0)  # 当前收费标准期初已缴金额（换房时=total_paid-旧标准已消费，未换房则等于total_paid）
     payment_due_date = db.Column(db.Date)  # 缴费到期日期
     payment_status = db.Column(db.String(20), default='paid')  # paid, unpaid, overdue
@@ -342,8 +342,8 @@ class Student(db.Model):
         end_date = self._get_billing_end_date()
         
         # 计算已消费计费天数（学年制跳过2月8月）
-        # 使用 fee_start_date（换房后从换房次日起算，未换房则等于入住日期）
-        billing_start = self.fee_start_date or self.check_in_date
+        # 使用 fee_restart_date（换房后从换房次日起算，未换房则等于入住日期）
+        billing_start = self.fee_restart_date or self.check_in_date
         billing_days = fee_std.count_billing_days(billing_start, end_date)
         
         if billing_days <= 0:
@@ -392,7 +392,7 @@ class Student(db.Model):
         return max(0, base_paid)
     
     def calculate_auto_due_date(self):
-        """根据当前收费标准下的可用金额，从 fee_start_date 自动计算到期日期
+        """根据当前收费标准下的可用金额，从 fee_restart_date 自动计算到期日期
         
         可用金额 = total_paid - fee_start_paid（换房时旧标准已消费的金额被扣除）
         学年制：智能跳过2月和8月（寒暑假不计费）
@@ -415,7 +415,7 @@ class Student(db.Model):
         billing_days = int(units * unit_days)
         
         # 从当前收费标准起算日期开始计算（换房后从换房次日起算）
-        start = self.fee_start_date or self.check_in_date
+        start = self.fee_restart_date or self.check_in_date
         return fee_std.add_billing_days(start, billing_days)
     
     
@@ -439,7 +439,7 @@ class Student(db.Model):
         
         today = date.today()
         end_date = self._get_billing_end_date()
-        start = self.fee_start_date or self.check_in_date  # 当前标准起算日期
+        start = self.fee_restart_date or self.check_in_date  # 当前标准起算日期
         
         # 判断是否使用手动到期日期模式
         if self.payment_due_date:
@@ -484,11 +484,11 @@ class Student(db.Model):
         
         today = date.today()
         end_date = self._get_billing_end_date()
-        start = self.fee_start_date or self.check_in_date  # 当前标准起算日期
+        start = self.fee_restart_date or self.check_in_date  # 当前标准起算日期
         consumed_days = fee_std.count_billing_days(start, end_date)
         
         # 判断是否使用手动到期日期模式
-        # 注意：如果 payment_due_date 在 fee_start_date 之前，说明是旧数据未清理，忽略它
+        # 注意：如果 payment_due_date 在 fee_restart_date 之前，说明是旧数据未清理，忽略它
         manual_due = self.payment_due_date
         if manual_due and start > manual_due:
             manual_due = None  # 旧到期日与当前起算日期矛盾，忽略
@@ -554,7 +554,7 @@ class Student(db.Model):
         # 已消费计费天数和金额（学年制跳过2月8月）
         # 切换当天仍属于旧房，所以已消费计算到 switch_date 的次日
         # 从当前收费标准起算日期开始计算（换房后从换房次日起算，未换房则从入住日期）
-        fee_start = self.fee_start_date or self.check_in_date
+        fee_start = self.fee_restart_date or self.check_in_date
         consumed_days = old_fee_std.count_billing_days(fee_start, switch_date + timedelta(days=1))
         consumed_value = consumed_days * old_daily
         
@@ -656,7 +656,7 @@ class Student(db.Model):
         
         # 计算旧标准已消费金额，更新 fee_start_paid（当前标准期初已缴金额）
         old_fee_std = preview_data['old_fee']
-        fee_start = self.fee_start_date or self.check_in_date
+        fee_start = self.fee_restart_date or self.check_in_date
         old_consumed_days = old_fee_std.count_billing_days(fee_start, switch_date + timedelta(days=1))
         old_daily = old_fee_std.price / old_fee_std.get_unit_days()
         old_consumed_value = old_consumed_days * old_daily
@@ -666,8 +666,8 @@ class Student(db.Model):
         
         # 更新收费标准、费用起算日期和期初已缴金额
         self.fee_standard_id = new_fee_standard_id
-        self.payment_due_date = None  # 清除旧到期日，由系统基于 fee_start_date 自动重算
-        self.fee_start_date = switch_date + timedelta(days=1)  # 新标准从换房次日起生效
+        self.payment_due_date = None  # 清除旧到期日，由系统基于 fee_restart_date 自动重算
+        self.fee_restart_date = switch_date + timedelta(days=1)  # 新标准从换房次日起生效
         self.fee_start_paid = new_fee_start_paid
         
         db.session.commit()
