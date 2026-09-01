@@ -540,7 +540,8 @@ class Student(db.Model):
         base_paid = self.calculate_base_paid()
         
         # 已消费计费天数和金额（学年制跳过2月8月）
-        consumed_days = old_fee_std.count_billing_days(self.check_in_date, switch_date)
+        # 切换当天仍属于旧房，所以已消费计算到 switch_date 的次日
+        consumed_days = old_fee_std.count_billing_days(self.check_in_date, switch_date + timedelta(days=1))
         consumed_value = consumed_days * old_daily
         
         # 剩余价值
@@ -549,9 +550,10 @@ class Student(db.Model):
         # 原计划到期日
         original_due = self.get_effective_due_date()
         
-        # 计算从切换日期到原到期日需要的费用（用新标准的计费方式）
+        # 计算从切换日期的次日到原到期日需要的费用（用新标准的计费方式）
+        # 新房间从 switch_date 的次日起算
         if original_due and original_due > switch_date:
-            days_to_cover = new_fee_std.count_billing_days(switch_date, original_due)
+            days_to_cover = new_fee_std.count_billing_days(switch_date + timedelta(days=1), original_due)
             needed_for_period = days_to_cover * new_daily
         else:
             days_to_cover = 0
@@ -585,7 +587,7 @@ class Student(db.Model):
             'new_due_date': new_due,
         }
     
-    def execute_room_switch(self, new_fee_standard_id, new_room_id, switch_date, preview_data):
+    def execute_room_switch(self, new_fee_standard_id, new_room_id, switch_date, preview_data, old_bed_occupancy=None):
         """执行换房型操作
         
         Args:
@@ -593,6 +595,7 @@ class Student(db.Model):
             new_room_id: 新房间ID
             switch_date: 切换日期
             preview_data: preview_room_switch()的返回值
+            old_bed_occupancy: 切换前学生的bed_occupancy（若为None则取self.bed_occupancy）
         
         Returns:
             dict with switch result
@@ -631,9 +634,11 @@ class Student(db.Model):
         db.session.add(fee_record)
         
         # 更新房间（处理入住人数）
+        # old_bed 是切换前的占用床位数（用于释放旧房间），self.bed_occupancy 为新值（用于占用新房间）
+        old_bed = old_bed_occupancy if old_bed_occupancy is not None else self.bed_occupancy
         if new_room and new_room.id != (old_room.id if old_room else None):
             if old_room:
-                old_room.current_occupancy = max(0, old_room.current_occupancy - self.bed_occupancy)
+                old_room.current_occupancy = max(0, old_room.current_occupancy - old_bed)
                 if old_room.current_occupancy < old_room.capacity:
                     old_room.status = 'available'
             new_room.current_occupancy += self.bed_occupancy

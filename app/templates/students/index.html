@@ -860,6 +860,7 @@
             </div>
             <form method="POST" action="" id="quick-switch-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="page" id="qs-page" value="{{ pagination.page or 1 }}">
                 <div class="modal-body">
                     <!-- 学生当前信息 -->
                     <div class="alert alert-light border mb-3">
