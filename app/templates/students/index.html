@@ -646,7 +646,7 @@
 
         // 填充目标房间（排除当前房间；按床位需求过滤）
         const roomSel = document.getElementById('qs-room-select');
-        roomSel.innerHTML = '<option value="">-- 请选择目标房间 --</option>';
+        roomSel.innerHTML = '<option value="">-- 不更换房间 --</option>';
         qsRoomsData.forEach(function(r) {
             if (String(r.id) === String(curRoomId)) return;
             if (r.available_beds < bed) return;  // 床位不够不显示
@@ -661,11 +661,8 @@
         const ymd = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
         document.getElementById('qs-date').value = ymd;
 
-        // 重置换房型
-        const feeCb = document.getElementById('qs-change-fee');
+        // 重置收费标准选择
         const feeSel = document.getElementById('qs-fee-select');
-        feeCb.checked = false;
-        feeSel.disabled = true;
         feeSel.value = '';
 
         // 重置预览
@@ -746,11 +743,11 @@
     function submitQuickSwitch() {
         const roomId = document.getElementById('qs-room-select').value;
         const switchDate = document.getElementById('qs-date').value;
-        if (!roomId) { alert('请选择目标房间'); return; }
+        const feeId = document.getElementById('qs-fee-select').value;
+        if (!roomId && !feeId) { alert('请选择目标房间或新收费标准'); return; }
         if (!switchDate) { alert('请选择切换日期'); return; }
 
-        const feeChanged = document.getElementById('qs-change-fee').checked;
-        if (feeChanged) {
+        if (feeId) {
             if (!document.getElementById('qs-fee-select').value) { alert('请选择新的收费标准'); return; }
             if (!qsPreviewReady) { alert('换房型涉及费用结算，请先点击「预览费用」确认差价'); return; }
         }
