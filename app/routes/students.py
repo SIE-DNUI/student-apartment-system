@@ -220,6 +220,7 @@ def add():
                     room.status = 'full'
         
         student.status = 'active'
+        student.fee_start_date = student.check_in_date  # 初始化费用起算日期为入住日期
         db.session.add(student)
         db.session.commit()
         
@@ -303,6 +304,11 @@ def edit(id):
             room = Room.query.get(old_room_id)
             if room:
                 _update_room_fee_standard(room)
+        
+        # 如果收费标准变了，更新费用起算日期为今天
+        if old_fee_standard_id != student.fee_standard_id:
+            from datetime import date as date_type
+            student.fee_start_date = date_type.today()
         
         db.session.commit()
         flash('学生信息更新成功！', 'success')

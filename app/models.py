@@ -203,6 +203,7 @@ class Student(db.Model):
     
     # 费用信息
     fee_standard_id = db.Column(db.Integer, db.ForeignKey('fee_standards.id'))
+    fee_start_date = db.Column(db.Date)  # 当前收费标准起算日期（换房时更新为换房次日，未换房则等于入住日期）
     payment_due_date = db.Column(db.Date)  # 缴费到期日期
     payment_status = db.Column(db.String(20), default='paid')  # paid, unpaid, overdue
     
@@ -406,8 +407,9 @@ class Student(db.Model):
         units = base_paid / fee_std.price
         billing_days = int(units * unit_days)
         
-        # 智能计算到期日期（学年制跳过2月8月）
-        return fee_std.add_billing_days(self.check_in_date, billing_days)
+        # 从当前收费标准起算日期开始计算（换房后从换房次日起算）
+        start = self.fee_start_date or self.check_in_date
+        return fee_std.add_billing_days(start, billing_days)
     
     
     def calculate_remaining_refund(self):
@@ -436,15 +438,16 @@ class Student(db.Model):
         
         today = date.today()
         end_date = self._get_billing_end_date()
+        start = self.fee_start_date or self.check_in_date  # 当前标准起算日期
         
         # 判断是否使用手动到期日期模式
         if self.payment_due_date:
             # 模式A：手动到期日期 → 按日费率均摊
-            total_billing_days = fee_std.count_billing_days(self.check_in_date, self.payment_due_date)
+            total_billing_days = fee_std.count_billing_days(start, self.payment_due_date)
             if total_billing_days <= 0:
                 return 0
             daily_rate = base_paid / total_billing_days
-            consumed_days = fee_std.count_billing_days(self.check_in_date, end_date)
+            consumed_days = fee_std.count_billing_days(start, end_date)
             consumed_amount = daily_rate * consumed_days
             remaining = max(0, base_paid - consumed_amount)
             return round(remaining, 2)
@@ -452,7 +455,7 @@ class Student(db.Model):
             # 模式B：自动模式 → 按单位价格计算
             unit_days = fee_std.get_unit_days()
             total_paid_days = (base_paid / fee_std.price) * unit_days
-            consumed_days = fee_std.count_billing_days(self.check_in_date, end_date)
+            consumed_days = fee_std.count_billing_days(start, end_date)
             remaining_days = max(0, total_paid_days - consumed_days)
             if remaining_days <= 0:
                 return 0
@@ -479,12 +482,13 @@ class Student(db.Model):
         
         today = date.today()
         end_date = self._get_billing_end_date()
-        consumed_days = fee_std.count_billing_days(self.check_in_date, end_date)
+        start = self.fee_start_date or self.check_in_date  # 当前标准起算日期
+        consumed_days = fee_std.count_billing_days(start, end_date)
         
         # 判断是否使用手动到期日期模式
         if self.payment_due_date:
             # 模式A：手动到期日期 → 按日费率均摊
-            total_billing_days = fee_std.count_billing_days(self.check_in_date, self.payment_due_date)
+            total_billing_days = fee_std.count_billing_days(start, self.payment_due_date)
             if total_billing_days <= 0:
                 return None
             daily_rate = base_paid / total_billing_days
@@ -541,7 +545,9 @@ class Student(db.Model):
         
         # 已消费计费天数和金额（学年制跳过2月8月）
         # 切换当天仍属于旧房，所以已消费计算到 switch_date 的次日
-        consumed_days = old_fee_std.count_billing_days(self.check_in_date, switch_date + timedelta(days=1))
+        # 从当前收费标准起算日期开始计算（换房后从换房次日起算，未换房则从入住日期）
+        fee_start = self.fee_start_date or self.check_in_date
+        consumed_days = old_fee_std.count_billing_days(fee_start, switch_date + timedelta(days=1))
         consumed_value = consumed_days * old_daily
         
         # 剩余价值
@@ -640,9 +646,10 @@ class Student(db.Model):
                 new_room.status = 'full'
             self.room_id = new_room.id
         
-        # 更新收费标准和到期日期
+        # 更新收费标准、到期日期和费用起算日期
         self.fee_standard_id = new_fee_standard_id
         self.payment_due_date = preview_data['new_due_date']
+        self.fee_start_date = switch_date + timedelta(days=1)  # 新标准从换房次日起生效
         
         db.session.commit()
         
