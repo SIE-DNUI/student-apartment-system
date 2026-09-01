@@ -221,6 +221,7 @@ def add():
         
         student.status = 'active'
         student.fee_start_date = student.check_in_date  # 初始化费用起算日期为入住日期
+        student.fee_start_paid = student.total_paid or 0  # 初始化当前标准期初已缴=总已缴
         db.session.add(student)
         db.session.commit()
         
@@ -305,9 +306,17 @@ def edit(id):
             if room:
                 _update_room_fee_standard(room)
         
-        # 如果收费标准变了，更新费用起算日期为今天，并清除旧到期日
+        # 如果收费标准变了，更新费用起算日期为今天，并重新计算 fee_start_paid
         if old_fee_standard_id != student.fee_standard_id:
             from datetime import date as date_type
+            old_fee_std = FeeStandard.query.get(old_fee_standard_id) if old_fee_standard_id else None
+            if old_fee_std:
+                # 计算旧标准从 fee_start_date 到今天已消费的金额
+                fee_start = student.fee_start_date or student.check_in_date
+                consumed_days = old_fee_std.count_billing_days(fee_start, date_type.today())
+                old_daily = old_fee_std.price / old_fee_std.get_unit_days()
+                consumed_value = consumed_days * old_daily
+                student.fee_start_paid = max(0, (student.total_paid or 0) - consumed_value)
             student.fee_start_date = date_type.today()
             student.payment_due_date = None  # 清除旧到期日，由系统基于新标准自动重算
         
