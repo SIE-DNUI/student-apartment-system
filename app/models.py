@@ -341,7 +341,9 @@ class Student(db.Model):
         end_date = self._get_billing_end_date()
         
         # 计算已消费计费天数（学年制跳过2月8月）
-        billing_days = fee_std.count_billing_days(self.check_in_date, end_date)
+        # 使用 fee_start_date（换房后从换房次日起算，未换房则等于入住日期）
+        billing_start = self.fee_start_date or self.check_in_date
+        billing_days = fee_std.count_billing_days(billing_start, end_date)
         
         if billing_days <= 0:
             return 0
@@ -646,9 +648,9 @@ class Student(db.Model):
                 new_room.status = 'full'
             self.room_id = new_room.id
         
-        # 更新收费标准、到期日期和费用起算日期
+        # 更新收费标准和费用起算日期
         self.fee_standard_id = new_fee_standard_id
-        self.payment_due_date = preview_data['new_due_date']
+        self.payment_due_date = None  # 清除旧到期日，由系统基于 fee_start_date 自动重算
         self.fee_start_date = switch_date + timedelta(days=1)  # 新标准从换房次日起生效
         
         db.session.commit()

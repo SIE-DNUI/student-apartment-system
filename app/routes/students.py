@@ -305,10 +305,11 @@ def edit(id):
             if room:
                 _update_room_fee_standard(room)
         
-        # 如果收费标准变了，更新费用起算日期为今天
+        # 如果收费标准变了，更新费用起算日期为今天，并清除旧到期日
         if old_fee_standard_id != student.fee_standard_id:
             from datetime import date as date_type
             student.fee_start_date = date_type.today()
+            student.payment_due_date = None  # 清除旧到期日，由系统基于新标准自动重算
         
         db.session.commit()
         flash('学生信息更新成功！', 'success')
