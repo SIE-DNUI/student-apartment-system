@@ -689,15 +689,11 @@
     function previewQuickSwitch() {
         const roomId = document.getElementById('qs-room-select').value;
         const switchDate = document.getElementById('qs-date').value;
+        const feeId = document.getElementById('qs-fee-select').value;
         const box = document.getElementById('qs-preview-box');
 
-        if (!roomId) { alert('请先选择目标房间'); return; }
+        if (!roomId && !feeId) { alert('请先选择目标房间或新收费标准'); return; }
         if (!switchDate) { alert('请选择切换日期'); return; }
-
-        const feeCb = document.getElementById('qs-change-fee');
-        if (feeCb.checked && !document.getElementById('qs-fee-select').value) {
-            alert('勾选了换房型，请选择新的收费标准'); return;
-        }
 
         const body = new URLSearchParams();
         body.append('csrf_token', '{{ csrf_token() }}');
