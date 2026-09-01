@@ -654,6 +654,26 @@ class Student(db.Model):
             'old_room': old_room,
             'new_room': new_room,
         }
+
+    def move_room(self, new_room):
+        """仅更换房间（不改变收费标准、不做任何费用结算）
+
+        处理新旧房间的床位占用与状态，并更新学生房间归属。
+        用于"只换房间、不换房型"的一键换房场景，费用和到期日保持不变。
+        本方法不提交事务，由调用方统一 commit。
+        返回 (old_room, new_room)。
+        """
+        old_room = self.room
+        if new_room and (not old_room or new_room.id != old_room.id):
+            if old_room:
+                old_room.current_occupancy = max(0, old_room.current_occupancy - self.bed_occupancy)
+                if old_room.current_occupancy < old_room.capacity:
+                    old_room.status = 'available'
+            new_room.current_occupancy += self.bed_occupancy
+            if new_room.current_occupancy >= new_room.capacity:
+                new_room.status = 'full'
+            self.room_id = new_room.id
+        return old_room, new_room
     
     def __repr__(self):
         return f'<Student {self.student_id}: {self.name}>'

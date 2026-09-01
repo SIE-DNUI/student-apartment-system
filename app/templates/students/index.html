@@ -172,6 +172,18 @@
                                         <i class="bi bi-box-arrow-right"></i>
                                     </button>
                                 </form>
+                                <button type="button" class="btn btn-sm btn-outline-success" title="一键换房"
+                                    {% if student.room_id %}
+                                    data-student-id="{{ student.id }}"
+                                    data-student-name="{{ student.name }}"
+                                    data-room-id="{{ student.room_id }}"
+                                    data-room-label="{{ student.room.building }}-{{ student.room.room_number }}"
+                                    data-fee-id="{{ student.fee_standard_id or '' }}"
+                                    data-bed="{{ student.bed_occupancy or 1 }}"
+                                    onclick="openQuickSwitchModal(this)"
+                                    {% else %}disabled{% endif %}>
+                                    <i class="bi bi-arrow-left-right"></i>
+                                </button>
                             </td>
                         </tr>
                         {% else %}
@@ -597,6 +609,173 @@
         document.getElementById('batch-checkout-date').value = checkOutDate;
         document.getElementById('batch-checkout-form').submit();
     }
+
+    // ===== 一键换房 =====
+    const qsRoomsData = [
+        {% for room in switch_rooms %}
+        { id: {{ room.id }}, building: '{{ room.building }}', room_number: '{{ room.room_number }}',
+          available_beds: {{ room.capacity - room.current_occupancy }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    const qsFeeNames = {
+        {% for fs in switch_fee_standards %}{{ fs.id }}: '{{ fs.name }}'{% if not loop.last %},{% endif %}{% endfor %}
+    };
+    let qsStudentId = null;
+    let qsPreviewReady = false;  // 当前选择是否已做过有效预览（换房型时强制要求）
+
+    function qsActionUrl(route) {
+        // route: 'preview' 或 'execute'。用占位ID 0 生成URL，再把末尾的 /0 换成真实学生ID
+        const tpl = route === 'preview'
+            ? '{{ url_for("students.quick_switch_preview", id=0) }}'
+            : '{{ url_for("students.quick_switch", id=0) }}';
+        const base = tpl.slice(0, tpl.length - String('/0').length);  // 去掉末尾 /0
+        return base + '/' + qsStudentId;
+    }
+
+    function openQuickSwitchModal(btn) {
+        qsStudentId = btn.dataset.studentId;
+        const name = btn.dataset.studentName;
+        const curRoomLabel = btn.dataset.roomLabel;
+        const curRoomId = btn.dataset.roomId;
+        const curFeeId = btn.dataset.feeId;
+        const bed = parseInt(btn.dataset.bed || '1');
+
+        document.getElementById('qs-student-name').textContent = name;
+        document.getElementById('qs-current-room').textContent = curRoomLabel;
+        document.getElementById('qs-current-fee').textContent = curFeeId ? (qsFeeNames[curFeeId] || '标准#' + curFeeId) : '未设置';
+
+        // 填充目标房间（排除当前房间；按床位需求过滤）
+        const roomSel = document.getElementById('qs-room-select');
+        roomSel.innerHTML = '<option value="">-- 请选择目标房间 --</option>';
+        qsRoomsData.forEach(function(r) {
+            if (String(r.id) === String(curRoomId)) return;
+            if (r.available_beds < bed) return;  // 床位不够不显示
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = r.building + '-' + r.room_number + '（剩余 ' + r.available_beds + ' 床位）';
+            roomSel.appendChild(opt);
+        });
+
+        // 重置日期为今天
+        const today = new Date();
+        const ymd = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        document.getElementById('qs-date').value = ymd;
+
+        // 重置换房型
+        const feeCb = document.getElementById('qs-change-fee');
+        const feeSel = document.getElementById('qs-fee-select');
+        feeCb.checked = false;
+        feeSel.disabled = true;
+        feeSel.value = '';
+
+        // 重置预览
+        document.getElementById('qs-preview-box').style.display = 'none';
+        document.getElementById('qs-preview-box').innerHTML = '';
+        qsPreviewReady = false;
+
+        // 表单提交地址
+        document.getElementById('quick-switch-form').action = qsActionUrl('execute');
+
+        new bootstrap.Modal(document.getElementById('quickSwitchModal')).show();
+    }
+
+    function onQuickSwitchRoomChange() {
+        qsPreviewReady = false;
+        document.getElementById('qs-preview-box').style.display = 'none';
+    }
+
+    function onQuickSwitchFeeToggle() {
+        const checked = document.getElementById('qs-change-fee').checked;
+        const feeSel = document.getElementById('qs-fee-select');
+        feeSel.disabled = !checked;
+        if (!checked) feeSel.value = '';
+        qsPreviewReady = false;
+        document.getElementById('qs-preview-box').style.display = 'none';
+    }
+
+    function qsSelectedFeeId() {
+        if (document.getElementById('qs-change-fee').checked) {
+            return document.getElementById('qs-fee-select').value || '';
+        }
+        return '';  // 不换房型
+    }
+
+    function previewQuickSwitch() {
+        const roomId = document.getElementById('qs-room-select').value;
+        const switchDate = document.getElementById('qs-date').value;
+        const box = document.getElementById('qs-preview-box');
+
+        if (!roomId) { alert('请先选择目标房间'); return; }
+        if (!switchDate) { alert('请选择切换日期'); return; }
+
+        const feeCb = document.getElementById('qs-change-fee');
+        if (feeCb.checked && !document.getElementById('qs-fee-select').value) {
+            alert('勾选了换房型，请选择新的收费标准'); return;
+        }
+
+        const body = new URLSearchParams();
+        body.append('csrf_token', '{{ csrf_token() }}');
+        body.append('new_room_id', roomId);
+        body.append('new_fee_standard_id', qsSelectedFeeId());
+        body.append('switch_date', switchDate);
+
+        fetch(qsActionUrl('preview'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            box.style.display = '';
+            if (!data.ok) {
+                qsPreviewReady = false;
+                box.innerHTML = '<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-circle me-1"></i>' + data.error + '</div>';
+                return;
+            }
+            qsPreviewReady = true;
+            if (data.same_fee) {
+                box.innerHTML = '<div class="alert alert-info mb-0"><i class="bi bi-info-circle me-1"></i>' + data.message + '</div>';
+            } else if (data.needs_payment) {
+                box.innerHTML = '<div class="alert alert-warning mb-0"><i class="bi bi-arrow-up-circle me-1"></i>' +
+                    '<strong>需补缴差价 ¥' + data.difference.toFixed(2) + '</strong>' +
+                    '<br><small>' + data.old_fee_name + ' → ' + data.new_fee_name + '，新到期日：' + data.new_due_date + '</small></div>';
+            } else {
+                box.innerHTML = '<div class="alert alert-success mb-0"><i class="bi bi-check-circle me-1"></i>' +
+                    '<strong>' + data.message + '</strong>' +
+                    '<br><small>' + data.old_fee_name + ' → ' + data.new_fee_name + '，新到期日：' + data.new_due_date + '</small></div>';
+            }
+        })
+        .catch(function() {
+            qsPreviewReady = false;
+            box.style.display = '';
+            box.innerHTML = '<div class="alert alert-danger mb-0">预览失败，请检查网络后重试</div>';
+        });
+    }
+
+    function submitQuickSwitch() {
+        const roomId = document.getElementById('qs-room-select').value;
+        const switchDate = document.getElementById('qs-date').value;
+        if (!roomId) { alert('请选择目标房间'); return; }
+        if (!switchDate) { alert('请选择切换日期'); return; }
+
+        const feeChanged = document.getElementById('qs-change-fee').checked;
+        if (feeChanged) {
+            if (!document.getElementById('qs-fee-select').value) { alert('请选择新的收费标准'); return; }
+            if (!qsPreviewReady) { alert('换房型涉及费用结算，请先点击「预览费用」确认差价'); return; }
+        }
+
+        const roomLabel = document.getElementById('qs-room-select').selectedOptions[0].textContent;
+        const msg = feeChanged
+            ? '确认换房并换房型？\n目标房间：' + roomLabel + '\n费用结算以预览为准。'
+            : '确认换到 ' + roomLabel + '？\n（房费与到期日不变）';
+        if (!confirm(msg)) return;
+
+        // 不换房型时不提交 fee 字段
+        const feeSel = document.getElementById('qs-fee-select');
+        feeSel.disabled = feeChanged ? false : true;
+        if (!feeChanged) feeSel.value = '';
+        document.getElementById('quick-switch-form').submit();
+    }
 </script>
 
 <!-- 单个退房日期模态框 -->
@@ -667,6 +846,75 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-primary" onclick="submitBatchCheckoutDate()">确认退房</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- 一键换房模态框 -->
+<div class="modal fade" id="quickSwitchModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>一键换房</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="" id="quick-switch-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <!-- 学生当前信息 -->
+                    <div class="alert alert-light border mb-3">
+                        <div class="row">
+                            <div class="col-md-4"><strong>学生：</strong><span id="qs-student-name"></span></div>
+                            <div class="col-md-4"><strong>当前房间：</strong><span id="qs-current-room"></span></div>
+                            <div class="col-md-4"><strong>当前收费标准：</strong><span id="qs-current-fee"></span></div>
+                        </div>
+                    </div>
+
+                    <!-- 选择目标房间 -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">目标房间 <span class="text-danger">*</span></label>
+                        <select id="qs-room-select" name="new_room_id" class="form-select" required onchange="onQuickSwitchRoomChange()">
+                            <option value="">-- 请选择目标房间 --</option>
+                        </select>
+                        <small class="text-muted">仅显示有空床位的非维修房间</small>
+                    </div>
+
+                    <!-- 切换日期 -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">切换日期 <span class="text-danger">*</span></label>
+                        <input type="date" id="qs-date" name="switch_date" class="form-control" required>
+                    </div>
+
+                    <!-- 换房型（可选） -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <input type="checkbox" id="qs-change-fee" onchange="onQuickSwitchFeeToggle()">
+                            同时更换收费标准（换房型）
+                        </label>
+                        <select id="qs-fee-select" name="new_fee_standard_id" class="form-select" disabled>
+                            <option value="">-- 保持原收费标准 --</option>
+                            {% for fs in switch_fee_standards %}
+                            <option value="{{ fs.id }}">{{ fs.name }} — ¥{{ "%.2f"|format(fs.price) }}/{{ fs.unit }}
+                                {% if fs.fee_type == '学年' %}（学年制，不含寒暑假）{% elif fs.fee_type == '自然年' %}（自然年，含假期）{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">勾选后才会出现收费标准下拉，不勾选则只换房间、房费和到期日不变</small>
+                    </div>
+
+                    <!-- 费用预览区 -->
+                    <div id="qs-preview-box" class="mb-2" style="display:none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="previewQuickSwitch()">
+                        <i class="bi bi-calculator me-1"></i>预览费用
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-success" onclick="submitQuickSwitch()">
+                        <i class="bi bi-check-lg me-1"></i>确认换房
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

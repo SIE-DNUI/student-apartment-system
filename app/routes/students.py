@@ -3,7 +3,7 @@
 学生管理路由模块
 提供学生信息管理功能
 """
-from flask import render_template, Blueprint, redirect, url_for, flash, request, send_file, session
+from flask import render_template, Blueprint, redirect, url_for, flash, request, send_file, session, jsonify
 from flask_login import login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, DateField, TextAreaField
@@ -126,6 +126,13 @@ def index():
         if s.has_arrears():
             arrears_count += 1
     
+    # 一键换房弹窗所需数据：有空床位的非维修房间 + 启用的收费标准
+    switch_rooms = Room.query.filter(
+        Room.status != 'maintenance',
+        Room.current_occupancy < Room.capacity
+    ).order_by(Room.building, Room.room_number).all()
+    switch_fee_standards = FeeStandard.query.filter_by(is_active=True).order_by(FeeStandard.name).all()
+    
     return render_template('students/index.html', 
                          title='学生管理',
                          students=students,
@@ -134,7 +141,9 @@ def index():
                          major=major,
                          filter_status=filter_status,
                          expiring_count=expiring_count,
-                         arrears_count=arrears_count)
+                         arrears_count=arrears_count,
+                         switch_rooms=switch_rooms,
+                         switch_fee_standards=switch_fee_standards)
 
 
 @bp.route('/add', methods=['GET', 'POST'])
@@ -643,6 +652,132 @@ def switch_room(id):
                          switch_date=None,
                          new_fee_standard_id=None,
                          available_rooms=[])
+
+
+@bp.route('/quick-switch-preview/<int:id>', methods=['POST'])
+@login_required
+@permission_required('write')
+def quick_switch_preview(id):
+    """一键换房：费用结算预览（AJAX，返回JSON）
+
+    仅当同时更换收费标准（换房型）时才需要预览差价；
+    只换房间不换房型时，费用和到期日不变，返回 same_fee 提示。
+    """
+    student = Student.query.get_or_404(id)
+    new_room_id = request.form.get('new_room_id', type=int)
+    new_fee_id = request.form.get('new_fee_standard_id', type=int)
+    switch_date_str = request.form.get('switch_date', '').strip()
+
+    try:
+        switch_date = datetime.strptime(switch_date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'error': '切换日期无效'}), 400
+
+    new_room = Room.query.get(new_room_id) if new_room_id else None
+    if not new_room:
+        return jsonify({'ok': False, 'error': '请选择目标房间'}), 400
+    if new_room.status == 'maintenance':
+        return jsonify({'ok': False, 'error': f'房间 {new_room.building}-{new_room.room_number} 正在维修，不能入住'}), 400
+    if student.room_id != new_room.id:
+        available_beds = new_room.capacity - new_room.current_occupancy
+        if available_beds < student.bed_occupancy:
+            return jsonify({'ok': False, 'error': f'房间 {new_room.building}-{new_room.room_number} 剩余床位不足（需 {student.bed_occupancy}，剩 {available_beds}）'}), 400
+
+    # 判断是否换房型
+    if not new_fee_id or new_fee_id == student.fee_standard_id:
+        return jsonify({
+            'ok': True,
+            'same_fee': True,
+            'message': '收费标准不变，房费和到期日保持不变，仅更换房间。'
+        })
+
+    # 换房型：复用现有结算逻辑
+    if not student.fee_standard_id:
+        return jsonify({'ok': False, 'error': '该学生尚未设置收费标准，无法计算换房型费用'}), 400
+    preview = student.preview_room_switch(new_fee_id, switch_date)
+    if not preview:
+        return jsonify({'ok': False, 'error': '无法计算费用，请确认学生入住日期和收费标准'}), 400
+
+    return jsonify({
+        'ok': True,
+        'same_fee': False,
+        'needs_payment': preview['needs_payment'],
+        'difference': round(abs(preview['difference']), 2),
+        'new_due_date': str(preview['new_due_date']),
+        'consumed_value': preview['consumed_value'],
+        'remaining_value': preview['remaining_value'],
+        'old_fee_name': preview['old_fee'].name,
+        'new_fee_name': preview['new_fee'].name,
+        'message': (f'需补缴差价 ¥{abs(preview["difference"]):.2f}'
+                    if preview['needs_payment']
+                    else (f'余额充足，剩余 ¥{abs(preview["difference"]):.2f} 将结转'
+                          if preview['difference'] < -0.01 else '费用基本持平，无需补缴'))
+    })
+
+
+@bp.route('/quick-switch/<int:id>', methods=['POST'])
+@login_required
+@permission_required('write')
+def quick_switch(id):
+    """一键换房：执行换房间（可同时换房型）
+
+    - 只换房间：调用 move_room，费用与到期日不变，不产生费用记录
+    - 同时换房型：复用 execute_room_switch 完成差价结算与到期日重算
+    两种情况都会自动更新新旧房间的收费标准联动。
+    """
+    student = Student.query.get_or_404(id)
+    new_room_id = request.form.get('new_room_id', type=int)
+    new_fee_id = request.form.get('new_fee_standard_id', type=int)
+    switch_date_str = request.form.get('switch_date', '').strip()
+
+    new_room = Room.query.get(new_room_id) if new_room_id else None
+    if not new_room:
+        flash('请选择目标房间', 'danger')
+        return redirect(url_for('students.index'))
+
+    try:
+        switch_date = datetime.strptime(switch_date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        switch_date = date.today()
+
+    # 床位校验（服务端兜底，防止并发或绕过前端）
+    if student.room_id != new_room.id:
+        available_beds = new_room.capacity - new_room.current_occupancy
+        if available_beds < student.bed_occupancy:
+            flash(f'房间 {new_room.building}-{new_room.room_number} 剩余床位不足（需 {student.bed_occupancy}，剩 {available_beds}），换房失败', 'danger')
+            return redirect(url_for('students.index'))
+
+    old_room = student.room
+    is_fee_change = bool(new_fee_id) and new_fee_id != student.fee_standard_id
+
+    if is_fee_change:
+        # 换房型：复用现有完整结算逻辑（含床位增减、费用记录、到期日重算）
+        preview = student.preview_room_switch(new_fee_id, switch_date)
+        if not preview:
+            flash('无法计算换房费用，请确认学生入住日期和收费标准', 'danger')
+            return redirect(url_for('students.index'))
+        result = student.execute_room_switch(new_fee_id, new_room.id, switch_date, preview)
+        db.session.commit()
+        # execute_room_switch 已更新床位；同步新旧房间收费标准联动
+        _update_room_fee_standard(old_room)
+        if new_room and new_room.id != (old_room.id if old_room else None):
+            _update_room_fee_standard(new_room)
+        if result['needs_payment']:
+            flash(f'{student.name} 换房成功！换到 {new_room.building}-{new_room.room_number}，需补缴 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
+        elif result['difference'] > 0.01:
+            flash(f'{student.name} 换房成功！换到 {new_room.building}-{new_room.room_number}，余额结转 ¥{result["difference"]:.2f}，新到期日：{result["new_due_date"]}', 'success')
+        else:
+            flash(f'{student.name} 换房成功！换到 {new_room.building}-{new_room.room_number}，新到期日：{result["new_due_date"]}', 'success')
+    else:
+        # 只换房间：费用与到期日不变
+        old_r, new_r = student.move_room(new_room)
+        _update_room_fee_standard(old_r)
+        if new_r and (not old_r or new_r.id != old_r.id):
+            _update_room_fee_standard(new_r)
+        db.session.commit()
+        flash(f'{student.name} 已换到 {new_room.building}-{new_room.room_number}（房费与到期日不变）', 'success')
+
+    return redirect(url_for('students.index'))
 
 
 @bp.route('/batch-payment', methods=['GET', 'POST'])
