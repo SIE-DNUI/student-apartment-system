@@ -619,30 +619,54 @@ class Student(db.Model):
         
         difference = preview_data['difference']
         
-        # 更新已缴金额（只在需要补缴时增加）
-        # 结转余额（difference < 0）时不调整 total_paid：剩余价值已通过到期日自动延续体现
-        # 如果错误地把 difference 加到 total_paid，base_paid() 会从缴费记录重复叠加，导致金额虚高
+        # ===== 第一步：计算旧标准的结算情况 =====
+        old_fee_std = preview_data['old_fee']
+        fee_start = self.fee_restart_date or self.check_in_date
+        old_consumed_days = old_fee_std.count_billing_days(fee_start, switch_date + timedelta(days=1))
+        old_daily = old_fee_std.price / old_fee_std.get_unit_days()
+        old_consumed_value = old_consumed_days * old_daily
+        
+        # 计算余额（正=余额，负=欠费）
+        balance = (self.total_paid or 0) - old_consumed_value
+        
+        # ===== 第二步：创建"换房结算记录"（总是创建，让账目清楚）=====
+        settlement_record = FeeRecord()
+        settlement_record.student_id = self.id
+        settlement_record.payment_date = switch_date
+        settlement_record.payment_method = '换房结算'
+        settlement_record.record_type = 'adjustment'
+        
+        if balance > 0.01:
+            # 有余额
+            settlement_record.amount = 0  # 金额为0，不影响 base_paid
+            settlement_record.notes = f'【旧房间结算】余额 {round(balance, 1)} 元 已结转至新房间（{old_fee_std.name}，{fee_start} 至 {switch_date}，已消费 {round(old_consumed_value, 1)} 元）'
+        elif balance < -0.01:
+            # 有欠费
+            settlement_record.amount = 0  # 金额为0，不影响 base_paid
+            settlement_record.notes = f'【旧房间结算】欠费 {round(abs(balance), 1)} 元 需补缴（{old_fee_std.name}，{fee_start} 至 {switch_date}，已消费 {round(old_consumed_value, 1)} 元）'
+        else:
+            # 刚好结清
+            settlement_record.amount = 0
+            settlement_record.notes = f'【旧房间结算】刚好结清（{old_fee_std.name}，{fee_start} 至 {switch_date}，已消费 {round(old_consumed_value, 1)} 元）'
+        
+        db.session.add(settlement_record)
+        
+        # ===== 第三步：更新已缴金额（只在需要补缴时增加）=====
+        # 结转余额时不调整 total_paid：剩余价值已通过到期日自动延续体现
         if preview_data['needs_payment'] and difference > 0.01:
             self.total_paid = (self.total_paid or 0) + difference
-        
-        # 记录费用调整（仅在实际有资金变动时创建缴费记录）
-        fee_record = FeeRecord()
-        fee_record.student_id = self.id
-        fee_record.payment_date = switch_date
-        fee_record.payment_method = '费用结转'
-        
-        if preview_data['needs_payment'] and difference > 0.01:
+            
+            # 创建"补差价记录"
+            fee_record = FeeRecord()
+            fee_record.student_id = self.id
+            fee_record.payment_date = switch_date
+            fee_record.payment_method = '费用补缴'
             fee_record.amount = difference
             fee_record.record_type = 'payment'
-            fee_record.notes = f'换房型补差价：{preview_data["old_fee"].name} → {preview_data["new_fee"].name}（{switch_date}起）'
+            fee_record.notes = f'【新房间补缴】{preview_data["old_fee"].name} → {preview_data["new_fee"].name}，补差价 {round(difference, 1)} 元（已扣除旧房间余额 {round(max(0, balance), 1)} 元）'
             db.session.add(fee_record)
-        else:
-            # 余额结转（difference <= 0）：不创建缴费记录，避免 base_paid 重复计算
-            # 剩余价值通过 new_due_date 自动延续覆盖
-            pass
         
-        # 更新房间（处理入住人数）
-        # old_bed 是切换前的占用床位数（用于释放旧房间），self.bed_occupancy 为新值（用于占用新房间）
+        # ===== 第四步：更新房间（处理入住人数）=====
         old_bed = old_bed_occupancy if old_bed_occupancy is not None else self.bed_occupancy
         if new_room and new_room.id != (old_room.id if old_room else None):
             if old_room:
@@ -654,17 +678,11 @@ class Student(db.Model):
                 new_room.status = 'full'
             self.room_id = new_room.id
         
-        # 计算旧标准已消费金额，更新 fee_start_paid（当前标准期初已缴金额）
-        old_fee_std = preview_data['old_fee']
-        fee_start = self.fee_restart_date or self.check_in_date
-        old_consumed_days = old_fee_std.count_billing_days(fee_start, switch_date + timedelta(days=1))
-        old_daily = old_fee_std.price / old_fee_std.get_unit_days()
-        old_consumed_value = old_consumed_days * old_daily
+        # ===== 第五步：更新收费标准、费用起算日期和期初已缴金额 =====
         # fee_start_paid = 旧标准已消费金额
         # 这样 available = total_paid - fee_start_paid = 剩余可用金额
         new_fee_start_paid = old_consumed_value
         
-        # 更新收费标准、费用起算日期和期初已缴金额
         self.fee_standard_id = new_fee_standard_id
         self.payment_due_date = None  # 清除旧到期日，由系统基于 fee_restart_date 自动重算
         self.fee_restart_date = switch_date + timedelta(days=1)  # 新标准从换房次日起生效
@@ -678,6 +696,7 @@ class Student(db.Model):
             'new_due_date': preview_data['new_due_date'],
             'old_room': old_room,
             'new_room': new_room,
+            'balance': round(balance, 2),  # 返回余额（正=余额，负=欠费）
         }
 
     def move_room(self, new_room):
