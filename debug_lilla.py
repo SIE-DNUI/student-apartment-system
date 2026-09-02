@@ -18,7 +18,7 @@ with app.app_context():
         sys.exit(1)
     
     print(f"✅ 找到学生：{student.name} (ID: {student.id})")
-    print(f"   房间：{student.room.name if student.room else '无'}")
+    print(f"   房间：{student.room.building + '-' + student.room.room_number if student.room else '无'}")
     print(f"   收费标准：{student.fee_standard.name if student.fee_standard else '无'}")
     print(f"   入住日期：{student.check_in_date}")
     print(f"   费用起算日期：{student.fee_restart_date or '（未设置，使用入住日期）'}")
