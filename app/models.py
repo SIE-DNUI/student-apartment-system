@@ -651,20 +651,10 @@ class Student(db.Model):
         
         db.session.add(settlement_record)
         
-        # ===== 第三步：更新已缴金额（只在需要补缴时增加）=====
-        # 结转余额时不调整 total_paid：剩余价值已通过到期日自动延续体现
-        if preview_data['needs_payment'] and difference > 0.01:
-            self.total_paid = (self.total_paid or 0) + difference
-            
-            # 创建"补差价记录"
-            fee_record = FeeRecord()
-            fee_record.student_id = self.id
-            fee_record.payment_date = switch_date
-            fee_record.payment_method = '费用补缴'
-            fee_record.amount = difference
-            fee_record.record_type = 'payment'
-            fee_record.notes = f'【新房间补缴】{preview_data["old_fee"].name} → {preview_data["new_fee"].name}，补差价 {round(difference, 1)} 元（已扣除旧房间余额 {round(max(0, balance), 1)} 元）'
-            db.session.add(fee_record)
+        # ===== 第三步：余额结转，不调整 total_paid，不补差价 =====
+        # 剩余价值通过 fee_start_paid 和新到期日自动延续体现
+        # 如果余额不足（欠费），通过 calculate_arrears() 自然体现，学生下次缴费时补缴
+        # 这样 total_paid 始终等于真实缴费金额，不会被"补差价"污染
         
         # ===== 第四步：更新房间（处理入住人数）=====
         old_bed = old_bed_occupancy if old_bed_occupancy is not None else self.bed_occupancy
