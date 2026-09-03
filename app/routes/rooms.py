@@ -477,13 +477,39 @@ def building_overview(building):
     partial_rooms = sum(1 for f in floors_data.values() for r in f if r['has_partial'])
     full_rooms = total_rooms - empty_rooms - partial_rooms
     total_empty_beds = sum(r['empty_beds'] for f in floors_data.values() for r in f)
+    
+    # 统计入住人数和性别分布
+    total_students = 0
+    male_count = 0
+    female_count = 0
+    for f_data in floors_data.values():
+        for r in f_data:
+            for s in r['students']:
+                total_students += 1
+                if s.gender and '男' in s.gender:
+                    male_count += 1
+                elif s.gender and '女' in s.gender:
+                    female_count += 1
 
     floor_stats = {}
     for floor, f_data in floors_data.items():
+        floor_students = 0
+        floor_male = 0
+        floor_female = 0
+        for r in f_data:
+            for s in r['students']:
+                floor_students += 1
+                if s.gender and '男' in s.gender:
+                    floor_male += 1
+                elif s.gender and '女' in s.gender:
+                    floor_female += 1
         floor_stats[floor] = {
             'total': len(f_data),
             'empty_rooms': sum(1 for r in f_data if r['is_empty']),
-            'empty_beds': sum(r['empty_beds'] for r in f_data)
+            'empty_beds': sum(r['empty_beds'] for r in f_data),
+            'students': floor_students,
+            'male': floor_male,
+            'female': floor_female
         }
 
     floors_sorted = sorted(floors_data.keys(), reverse=True)
@@ -491,7 +517,10 @@ def building_overview(building):
     stats = {
         'total': total_rooms, 'empty': empty_rooms,
         'partial': partial_rooms, 'full': full_rooms,
-        'empty_beds': total_empty_beds
+        'empty_beds': total_empty_beds,
+        'total_students': total_students,
+        'male_count': male_count,
+        'female_count': female_count
     }
 
     # 判断是否为A塔/B塔（有平面图配置的楼栋）

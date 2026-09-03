@@ -134,6 +134,9 @@
                 <span class="badge bg-warning text-dark">有空床位: {{ stats.partial }}</span>
                 <span class="badge bg-secondary">空房: {{ stats.empty }}</span>
                 <span class="badge bg-info">可用床位: {{ stats.empty_beds }}</span>
+                <span class="badge bg-primary">已入住: {{ stats.total_students }}人</span>
+                <span class="badge bg-danger">男生: {{ stats.male_count }}</span>
+                <span class="badge bg-info">女生: {{ stats.female_count }}</span>
             </div>
         </div>
     </div>
@@ -259,6 +262,9 @@
                         <th class="stat-header" style="width: 50px;">房间数</th>
                         <th class="stat-header" style="width: 50px;">剩余房</th>
                         <th class="stat-header" style="width: 50px;">空床位</th>
+                        <th class="stat-header" style="width: 50px;">已入住</th>
+                        <th class="stat-header" style="width: 40px;">男</th>
+                        <th class="stat-header" style="width: 40px;">女</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -301,6 +307,9 @@
                         <td class="stat-cell text-center align-middle">{{ floor_stats[floor].total }}</td>
                         <td class="stat-cell text-center align-middle bg-warning bg-opacity-25">{{ floor_stats[floor].empty_rooms }}</td>
                         <td class="stat-cell text-center align-middle bg-success bg-opacity-25">{{ floor_stats[floor].empty_beds }}</td>
+                        <td class="stat-cell text-center align-middle table-primary">{{ floor_stats[floor].students }}</td>
+                        <td class="stat-cell text-center align-middle table-danger">{{ floor_stats[floor].male }}</td>
+                        <td class="stat-cell text-center align-middle table-info">{{ floor_stats[floor].female }}</td>
                     </tr>
                     {% endfor %}
                     <tr class="table-dark text-center fw-bold">
@@ -309,6 +318,9 @@
                         <td class="table-info">{{ stats.total }}</td>
                         <td class="table-warning">{{ stats.empty }}</td>
                         <td class="table-success">{{ stats.empty_beds }}</td>
+                        <td class="table-primary">{{ stats.total_students }}人</td>
+                        <td class="table-danger">{{ stats.male_count }}</td>
+                        <td class="table-info">{{ stats.female_count }}</td>
                     </tr>
                 </tbody>
             </table>
